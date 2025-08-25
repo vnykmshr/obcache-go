@@ -9,11 +9,10 @@ import (
 
 func main() {
 	// Create a cache with default configuration
-	cache, err := obcache.New(nil)
+	cache, err := obcache.New(obcache.NewDefaultConfig())
 	if err != nil {
 		panic(err)
 	}
-	defer cache.Close()
 
 	// Example 1: Basic cache usage
 	fmt.Println("=== Basic Cache Usage ===")
@@ -94,7 +93,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer customCache.Close()
 
 	slowFunction := func(s string) string {
 		fmt.Printf("Slow processing of '%s'...\n", s)
