@@ -36,13 +36,13 @@ func NewDefaultConfig() *Config {
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: time.Minute,
 		KeyGenFunc:      nil, // will use DefaultKeyFunc
-		Hooks:          &Hooks{},
+		Hooks:           &Hooks{},
 	}
 }
 
 // WithMaxEntries sets the maximum number of cache entries
-func (c *Config) WithMaxEntries(max int) *Config {
-	c.MaxEntries = max
+func (c *Config) WithMaxEntries(maxEntries int) *Config {
+	c.MaxEntries = maxEntries
 	return c
 }
 

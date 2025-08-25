@@ -137,7 +137,7 @@ func (c *Cache) Invalidate(key string) error {
 	if err == nil {
 		c.stats.incInvalidations()
 		c.updateKeyCount()
-		
+
 		if c.hooks != nil {
 			c.hooks.invokeOnInvalidate(key)
 		}
@@ -254,35 +254,4 @@ func (c *Cache) getKeyGenFunc() KeyGenFunc {
 		return c.config.KeyGenFunc
 	}
 	return DefaultKeyFunc
-}
-
-// generateKey generates a cache key from function arguments
-func (c *Cache) generateKey(args []any) string {
-	keyFunc := c.getKeyGenFunc()
-	return keyFunc(args)
-}
-
-// getOrCompute retrieves a value from cache or computes it using singleflight
-// This is used internally by the Wrap functions
-func (c *Cache) getOrCompute(key string, compute func() (any, error)) (any, error) {
-	// First try to get from cache
-	if value, found := c.Get(key); found {
-		return value, nil
-	}
-
-	// Use singleflight to prevent duplicate computation
-	c.stats.incInFlight()
-	defer c.stats.decInFlight()
-
-	value, err, shared := c.sf.Do(key, compute)
-	if err != nil {
-		return nil, err
-	}
-
-	// Store in cache if computation succeeded and this wasn't a shared call
-	if !shared {
-		c.Set(key, value, c.config.DefaultTTL)
-	}
-
-	return value, nil
 }

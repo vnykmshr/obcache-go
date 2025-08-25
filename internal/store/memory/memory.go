@@ -72,7 +72,7 @@ func (s *Store) Get(key string) (*entry.Entry, bool) {
 			s.mutex.Lock()
 			s.cache.Remove(key)
 			s.mutex.Unlock()
-			
+
 			if s.cleanupCallback != nil {
 				s.cleanupCallback(key, entry.Value)
 			}
@@ -187,7 +187,7 @@ func (s *Store) Cleanup() int {
 		if entry, found := s.cache.Peek(key); found && entry.IsExpired() {
 			s.cache.Remove(key)
 			removed++
-			
+
 			if s.cleanupCallback != nil {
 				s.cleanupCallback(key, entry.Value)
 			}
@@ -200,7 +200,7 @@ func (s *Store) Cleanup() int {
 // startCleanup starts the automatic cleanup goroutine
 func (s *Store) startCleanup(interval time.Duration) {
 	s.cleanupTicker = time.NewTicker(interval)
-	
+
 	go func() {
 		for {
 			select {

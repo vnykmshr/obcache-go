@@ -1,0 +1,69 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  govet:
+    enable:
+      - shadow
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  goimports:
+    local-prefixes: github.com/vnykmshr/obcache-go
+  gofmt:
+    simplify: true
+  gosec:
+    excludes:
+      - G404 # Use of weak random number generator is acceptable for cache keys
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - goconst
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - unconvert
+    - unparam
+    - gocritic
+    - revive
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - gocritic
+    - path: examples/
+      linters:
+        - gosec
+        - gocritic
+    - path: internal/singleflight/
+      linters:
+        - revive # Allow non-standard error position for singleflight API compatibility
+    - path: pkg/obcache/wrap\.go
+      linters:
+        - errcheck  # Complex reflection code needs some unchecked errors
+        - revive    # Allow complex if-else structure for reflection logic
+    - path: internal/store/memory/memory\.go
+      linters:
+        - goimports # Allow alias import for LRU library
+  max-issues-per-linter: 0
+  max-same-issues: 0

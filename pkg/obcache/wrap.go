@@ -10,10 +10,10 @@ import (
 type WrapOptions struct {
 	// TTL overrides the default TTL for this wrapped function
 	TTL time.Duration
-	
+
 	// KeyFunc overrides the default key generation function
 	KeyFunc KeyGenFunc
-	
+
 	// DisableCache disables caching for this function (useful for testing)
 	DisableCache bool
 }
@@ -46,10 +46,10 @@ func WithoutCache() WrapOption {
 // T must be a function type
 func Wrap[T any](cache *Cache, fn T, options ...WrapOption) T {
 	opts := &WrapOptions{
-		TTL: cache.config.DefaultTTL,
+		TTL:     cache.config.DefaultTTL,
 		KeyFunc: cache.getKeyGenFunc(),
 	}
-	
+
 	for _, opt := range options {
 		opt(opts)
 	}
@@ -84,7 +84,7 @@ func wrapFunction[T any](cache *Cache, fn T, opts *WrapOptions) T {
 		}
 
 		// Check if we're dealing with a function that returns (T, error) or just T
-		hasErrorReturn := fnType.NumOut() >= 2 && 
+		hasErrorReturn := fnType.NumOut() >= 2 &&
 			fnType.Out(fnType.NumOut()-1).Implements(reflect.TypeOf((*error)(nil)).Elem())
 
 		// Try to get from cache first
@@ -95,7 +95,7 @@ func wrapFunction[T any](cache *Cache, fn T, opts *WrapOptions) T {
 		// Use singleflight to prevent duplicate calls
 		compute := func() (any, error) {
 			results := fnValue.Call(args)
-			
+
 			if hasErrorReturn {
 				// Handle (T, error) return pattern
 				errResult := results[len(results)-1]
@@ -103,7 +103,7 @@ func wrapFunction[T any](cache *Cache, fn T, opts *WrapOptions) T {
 					// Don't cache errors, return them directly
 					return nil, errResult.Interface().(error)
 				}
-				
+
 				// Cache the successful result (all values except error)
 				if len(results) == 2 {
 					// Single value + error
@@ -136,7 +136,7 @@ func wrapFunction[T any](cache *Cache, fn T, opts *WrapOptions) T {
 		defer cache.stats.decInFlight()
 
 		value, err, shared := cache.sf.Do(key, compute)
-		
+
 		if err != nil {
 			// Return the error in the function's expected format
 			return createErrorReturn(fnType, err)
@@ -161,8 +161,8 @@ func convertCachedValue(cachedValue any, fnType reflect.Type, hasErrorReturn boo
 
 	if hasErrorReturn {
 		// Set error to nil
-		results[numOut-1] = reflect.Zero(fnType.Out(numOut-1))
-		
+		results[numOut-1] = reflect.Zero(fnType.Out(numOut - 1))
+
 		if numOut == 2 {
 			// Single value + error
 			results[0] = reflect.ValueOf(cachedValue)
@@ -195,8 +195,8 @@ func convertComputedValue(value any, fnType reflect.Type, hasErrorReturn bool) [
 
 	if hasErrorReturn {
 		// Set error to nil (since we only cache successful results)
-		results[numOut-1] = reflect.Zero(fnType.Out(numOut-1))
-		
+		results[numOut-1] = reflect.Zero(fnType.Out(numOut - 1))
+
 		if numOut == 2 {
 			// Single value + error
 			results[0] = reflect.ValueOf(value)
@@ -226,15 +226,15 @@ func convertComputedValue(value any, fnType reflect.Type, hasErrorReturn bool) [
 func createErrorReturn(fnType reflect.Type, err error) []reflect.Value {
 	numOut := fnType.NumOut()
 	results := make([]reflect.Value, numOut)
-	
+
 	// Set all non-error returns to zero values
 	for i := 0; i < numOut-1; i++ {
 		results[i] = reflect.Zero(fnType.Out(i))
 	}
-	
+
 	// Set the error
 	results[numOut-1] = reflect.ValueOf(err)
-	
+
 	return results
 }
 
@@ -287,22 +287,22 @@ func WrapFunc2WithError[T1, T2, R any](cache *Cache, fn func(T1, T2) (R, error),
 // This is useful for providing better error messages at runtime
 func ValidateWrappableFunction(fn any) error {
 	fnType := reflect.TypeOf(fn)
-	
+
 	if fnType.Kind() != reflect.Func {
 		return fmt.Errorf("not a function: %T", fn)
 	}
-	
+
 	// Check if function is variadic (not currently supported)
 	if fnType.IsVariadic() {
 		return fmt.Errorf("variadic functions are not currently supported")
 	}
-	
+
 	// Validate return types
 	numOut := fnType.NumOut()
 	if numOut == 0 {
 		return fmt.Errorf("functions with no return values cannot be cached")
 	}
-	
+
 	// If there are multiple returns, the last one should be error
 	if numOut > 1 {
 		lastOut := fnType.Out(numOut - 1)
@@ -310,6 +310,6 @@ func ValidateWrappableFunction(fn any) error {
 			return fmt.Errorf("multi-return functions must have error as the last return value")
 		}
 	}
-	
+
 	return nil
 }

@@ -9,11 +9,13 @@ import (
 	"strings"
 )
 
+const noArgsKey = "no-args"
+
 // DefaultKeyFunc generates cache keys from function arguments using a hash-based approach
 // This function handles most common Go types and provides stable key generation
 func DefaultKeyFunc(args []any) string {
 	if len(args) == 0 {
-		return "no-args"
+		return noArgsKey
 	}
 
 	var parts []string
@@ -37,7 +39,7 @@ func DefaultKeyFunc(args []any) string {
 // This is faster but may have collisions for complex types
 func SimpleKeyFunc(args []any) string {
 	if len(args) == 0 {
-		return "no-args"
+		return noArgsKey
 	}
 
 	var parts []string
@@ -168,7 +170,7 @@ func handleStruct(v reflect.Value, t reflect.Type) string {
 	var fields []string
 	for i := 0; i < numFields && i < 10; i++ { // Limit to first 10 fields
 		field := t.Field(i)
-		
+
 		// Skip unexported fields
 		if !field.IsExported() {
 			continue

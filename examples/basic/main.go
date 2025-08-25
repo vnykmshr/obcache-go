@@ -18,14 +18,14 @@ func main() {
 	// Example 1: Basic cache usage
 	fmt.Println("=== Basic Cache Usage ===")
 	cache.Set("key1", "value1", 5*time.Minute)
-	
+
 	if value, found := cache.Get("key1"); found {
 		fmt.Printf("Found: %v\n", value)
 	}
 
 	// Example 2: Function wrapping - simple function
 	fmt.Println("\n=== Function Wrapping ===")
-	
+
 	// Original expensive function
 	expensiveComputation := func(n int) string {
 		fmt.Printf("Computing for %d (this is expensive)...\n", n)
@@ -50,7 +50,7 @@ func main() {
 
 	// Example 3: Function with error handling
 	fmt.Println("\n=== Function with Error ===")
-	
+
 	riskyFunction := func(n int) (string, error) {
 		if n < 0 {
 			return "", fmt.Errorf("negative numbers not allowed")
@@ -85,11 +85,11 @@ func main() {
 
 	// Example 4: Custom configuration
 	fmt.Println("\n=== Custom Configuration ===")
-	
+
 	customConfig := obcache.NewDefaultConfig().
 		WithMaxEntries(100).
 		WithDefaultTTL(1 * time.Second)
-	
+
 	customCache, err := obcache.New(customConfig)
 	if err != nil {
 		panic(err)

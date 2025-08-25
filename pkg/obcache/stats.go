@@ -60,11 +60,11 @@ func (s *Stats) HitRate() float64 {
 	hits := s.Hits()
 	misses := s.Misses()
 	total := hits + misses
-	
+
 	if total == 0 {
 		return 0
 	}
-	
+
 	return float64(hits) / float64(total) * 100
 }
 
