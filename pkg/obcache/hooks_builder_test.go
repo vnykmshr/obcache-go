@@ -310,3 +310,237 @@ var (
 	hitValue                          any
 	hitArgs, missArgs, invalidateArgs []any
 )
+
+func TestHooksPriorityOrdering(t *testing.T) {
+	hooks := &Hooks{}
+	var executionOrder []string
+
+	// Add hooks with different priorities
+	hooks.AddOnHitWithPriority(func(_ string, _ any) {
+		executionOrder = append(executionOrder, "low")
+	}, HookPriorityLow)
+
+	hooks.AddOnHitWithPriority(func(_ string, _ any) {
+		executionOrder = append(executionOrder, "high")
+	}, HookPriorityHigh)
+
+	hooks.AddOnHitWithPriority(func(_ string, _ any) {
+		executionOrder = append(executionOrder, "medium")
+	}, HookPriorityMedium)
+
+	// Test that hooks execute in priority order (high -> medium -> low)
+	cache := createCacheWithHooks(t, hooks)
+	_ = cache.Set("test", "value", time.Hour)
+	_, _ = cache.Get("test")
+
+	if len(executionOrder) != 3 {
+		t.Fatalf("Expected 3 hooks to execute, got %d", len(executionOrder))
+	}
+
+	expectedOrder := []string{"high", "medium", "low"}
+	for i, expected := range expectedOrder {
+		if executionOrder[i] != expected {
+			t.Fatalf("Expected execution order %v, got %v", expectedOrder, executionOrder)
+		}
+	}
+}
+
+func TestHooksConditionalExecution(t *testing.T) {
+	type debugKey string
+	
+	hooks := &Hooks{}
+	var metricsExecuted, debugExecuted bool
+
+	// Add conditional hooks
+	hooks.AddOnHitCtxIf(func(_ context.Context, _ string, _ any, _ []any) {
+		metricsExecuted = true
+	}, KeyPrefixCondition("metrics:"))
+
+	hooks.AddOnHitCtxIf(func(_ context.Context, _ string, _ any, _ []any) {
+		debugExecuted = true
+	}, ContextValueCondition(debugKey("debug"), true))
+
+	cache := createCacheWithHooks(t, hooks)
+
+	// Test 1: Key with metrics prefix should trigger metrics hook
+	_ = cache.Set("metrics:counter", "value", time.Hour)
+	_, _ = cache.Get("metrics:counter")
+
+	if !metricsExecuted {
+		t.Fatal("Metrics hook should have executed for metrics: prefixed key")
+	}
+	if debugExecuted {
+		t.Fatal("Debug hook should not have executed without debug context")
+	}
+
+	// Reset
+	metricsExecuted, debugExecuted = false, false
+
+	// Test 2: Regular key should not trigger either hook
+	_ = cache.Set("regular", "value", time.Hour)
+	_, _ = cache.Get("regular")
+
+	if metricsExecuted || debugExecuted {
+		t.Fatal("No conditional hooks should execute for regular key")
+	}
+
+	// Test 3: Key with debug context should trigger debug hook
+	debugCtx := context.WithValue(context.Background(), debugKey("debug"), true)
+	_ = cache.Set("test", "value", time.Hour)
+	_, _ = cache.Get("test", WithContext(debugCtx))
+
+	if !debugExecuted {
+		t.Fatal("Debug hook should have executed with debug context")
+	}
+}
+
+func TestHookCompositionUtilities(t *testing.T) {
+	var calls []string
+
+	// Test CombineOnHitHooks
+	hook1 := func(key string, value any) { calls = append(calls, "hook1") }
+	hook2 := func(key string, value any) { calls = append(calls, "hook2") }
+	combinedHook := CombineOnHitHooks(hook1, hook2)
+
+	combinedHook("test", "value")
+
+	if len(calls) != 2 || calls[0] != "hook1" || calls[1] != "hook2" {
+		t.Fatalf("Expected [hook1, hook2], got %v", calls)
+	}
+
+	// Test ConditionalHook
+	calls = nil
+	conditionalHook := ConditionalHook(
+		func(ctx context.Context, key string, value any, args []any) {
+			calls = append(calls, "conditional")
+		},
+		KeyPrefixCondition("test:"),
+	)
+
+	// Should execute
+	conditionalHook(context.Background(), "test:key", "value", nil)
+	if len(calls) != 1 || calls[0] != "conditional" {
+		t.Fatalf("Conditional hook should have executed for test: prefix")
+	}
+
+	// Should not execute
+	calls = nil
+	conditionalHook(context.Background(), "other", "value", nil)
+	if len(calls) != 0 {
+		t.Fatal("Conditional hook should not execute for non-matching key")
+	}
+}
+
+func TestHookConditionBuilders(t *testing.T) {
+	// Test KeyPrefixCondition
+	prefixCondition := KeyPrefixCondition("api:")
+	if !prefixCondition(context.Background(), "api:users", nil) {
+		t.Fatal("KeyPrefixCondition should match api: prefix")
+	}
+	if prefixCondition(context.Background(), "web:users", nil) {
+		t.Fatal("KeyPrefixCondition should not match web: prefix")
+	}
+
+	// Test ContextValueCondition
+	type envKey string
+	ctx := context.WithValue(context.Background(), envKey("env"), "prod")
+	envCondition := ContextValueCondition(envKey("env"), "prod")
+	if !envCondition(ctx, "key", nil) {
+		t.Fatal("ContextValueCondition should match prod environment")
+	}
+	if envCondition(context.Background(), "key", nil) {
+		t.Fatal("ContextValueCondition should not match missing context")
+	}
+
+	// Test AndCondition
+	andCondition := AndCondition(
+		KeyPrefixCondition("api:"),
+		ContextValueCondition("env", "prod"),
+	)
+	if !andCondition(ctx, "api:users", nil) {
+		t.Fatal("AndCondition should match when both conditions are true")
+	}
+	if andCondition(ctx, "web:users", nil) {
+		t.Fatal("AndCondition should not match when first condition fails")
+	}
+
+	// Test OrCondition
+	orCondition := OrCondition(
+		KeyPrefixCondition("api:"),
+		KeyPrefixCondition("web:"),
+	)
+	if !orCondition(context.Background(), "api:users", nil) {
+		t.Fatal("OrCondition should match api: prefix")
+	}
+	if !orCondition(context.Background(), "web:users", nil) {
+		t.Fatal("OrCondition should match web: prefix")
+	}
+	if orCondition(context.Background(), "db:users", nil) {
+		t.Fatal("OrCondition should not match db: prefix")
+	}
+}
+
+func TestHooksBackwardCompatibility(t *testing.T) {
+	// Ensure that existing hook usage continues to work unchanged
+	hooks := &Hooks{}
+	var legacyCalled, ctxCalled bool
+
+	// Add legacy hooks
+	hooks.AddOnHit(func(key string, value any) {
+		legacyCalled = true
+	})
+
+	// Add context-aware hooks
+	hooks.AddOnHitCtx(func(ctx context.Context, key string, value any, args []any) {
+		ctxCalled = true
+	})
+
+	cache := createCacheWithHooks(t, hooks)
+	_ = cache.Set("test", "value", time.Hour)
+	_, _ = cache.Get("test")
+
+	if !legacyCalled {
+		t.Fatal("Legacy hook should still execute")
+	}
+	if !ctxCalled {
+		t.Fatal("Context-aware hook should still execute")
+	}
+}
+
+func TestHooksExecutionOrder(t *testing.T) {
+	hooks := &Hooks{}
+	var executionOrder []string
+
+	// Add hooks of different types to verify execution order
+	hooks.AddOnHit(func(key string, value any) {
+		executionOrder = append(executionOrder, "legacy")
+	})
+
+	hooks.AddOnHitCtx(func(ctx context.Context, key string, value any, args []any) {
+		executionOrder = append(executionOrder, "context")
+	})
+
+	hooks.AddOnHitWithPriority(func(key string, value any) {
+		executionOrder = append(executionOrder, "priority")
+	}, HookPriorityHigh)
+
+	hooks.AddOnHitCtxIf(func(ctx context.Context, key string, value any, args []any) {
+		executionOrder = append(executionOrder, "conditional")
+	}, func(ctx context.Context, key string, args []any) bool { return true })
+
+	cache := createCacheWithHooks(t, hooks)
+	_ = cache.Set("test", "value", time.Hour)
+	_, _ = cache.Get("test")
+
+	// Expected order: legacy -> context -> priority -> conditional
+	expectedOrder := []string{"legacy", "context", "priority", "conditional"}
+	if len(executionOrder) != len(expectedOrder) {
+		t.Fatalf("Expected %d hooks to execute, got %d", len(expectedOrder), len(executionOrder))
+	}
+
+	for i, expected := range expectedOrder {
+		if executionOrder[i] != expected {
+			t.Fatalf("Expected execution order %v, got %v", expectedOrder, executionOrder)
+		}
+	}
+}
