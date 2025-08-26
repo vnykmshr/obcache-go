@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/vnykmshr/obcache-go/pkg/compression"
+	"github.com/vnykmshr/obcache-go/pkg/metrics"
 )
 
 // StoreType defines the type of backend store to use
@@ -39,6 +41,25 @@ type RedisConfig struct {
 	KeyPrefix string
 }
 
+// MetricsConfig holds metrics exporter configuration
+type MetricsConfig struct {
+	// Exporter is the metrics exporter to use
+	Exporter metrics.Exporter
+
+	// Enabled determines whether metrics collection is enabled
+	Enabled bool
+
+	// CacheName is the name label applied to all metrics for this cache instance
+	CacheName string
+
+	// ReportingInterval determines how often to export stats automatically
+	// Set to 0 to disable automatic reporting
+	ReportingInterval time.Duration
+
+	// Labels are additional labels applied to all metrics
+	Labels metrics.Labels
+}
+
 // Config defines the configuration options for a Cache instance
 type Config struct {
 	// StoreType determines which backend store to use
@@ -69,6 +90,14 @@ type Config struct {
 	// Redis holds Redis-specific configuration
 	// Only used when StoreType is StoreTypeRedis
 	Redis *RedisConfig
+
+	// Metrics holds metrics exporter configuration
+	// If nil, no metrics will be exported
+	Metrics *MetricsConfig
+
+	// Compression holds compression configuration
+	// If nil, compression will be disabled
+	Compression *compression.Config
 }
 
 // KeyGenFunc defines a function that generates cache keys from function arguments
@@ -199,5 +228,94 @@ func (c *Config) WithRedisKeyPrefix(prefix string) *Config {
 		c.Redis = &RedisConfig{}
 	}
 	c.Redis.KeyPrefix = prefix
+	return c
+}
+
+// WithMetrics configures cache metrics export
+func (c *Config) WithMetrics(metricsConfig *MetricsConfig) *Config {
+	c.Metrics = metricsConfig
+	return c
+}
+
+// WithMetricsExporter configures metrics with the given exporter
+func (c *Config) WithMetricsExporter(exporter metrics.Exporter, cacheName string) *Config {
+	c.Metrics = &MetricsConfig{
+		Exporter:          exporter,
+		Enabled:           true,
+		CacheName:         cacheName,
+		ReportingInterval: 30 * time.Second,
+		Labels:            make(metrics.Labels),
+	}
+	return c
+}
+
+// WithMetricsLabels adds labels to metrics configuration
+func (c *Config) WithMetricsLabels(labels metrics.Labels) *Config {
+	if c.Metrics == nil {
+		c.Metrics = &MetricsConfig{
+			Enabled:           false,
+			Labels:            make(metrics.Labels),
+			ReportingInterval: 30 * time.Second,
+		}
+	}
+	for k, v := range labels {
+		c.Metrics.Labels[k] = v
+	}
+	return c
+}
+
+// WithMetricsReportingInterval sets the metrics reporting interval
+func (c *Config) WithMetricsReportingInterval(interval time.Duration) *Config {
+	if c.Metrics == nil {
+		c.Metrics = &MetricsConfig{
+			Enabled:           false,
+			Labels:            make(metrics.Labels),
+			ReportingInterval: interval,
+		}
+	} else {
+		c.Metrics.ReportingInterval = interval
+	}
+	return c
+}
+
+// WithCompression configures cache compression
+func (c *Config) WithCompression(compressionConfig *compression.Config) *Config {
+	c.Compression = compressionConfig
+	return c
+}
+
+// WithCompressionEnabled enables compression with default settings
+func (c *Config) WithCompressionEnabled(enabled bool) *Config {
+	if c.Compression == nil {
+		c.Compression = compression.NewDefaultConfig()
+	}
+	c.Compression.Enabled = enabled
+	return c
+}
+
+// WithCompressionAlgorithm sets the compression algorithm
+func (c *Config) WithCompressionAlgorithm(algorithm compression.CompressorType) *Config {
+	if c.Compression == nil {
+		c.Compression = compression.NewDefaultConfig()
+	}
+	c.Compression.Algorithm = algorithm
+	return c
+}
+
+// WithCompressionMinSize sets the minimum size threshold for compression
+func (c *Config) WithCompressionMinSize(minSize int) *Config {
+	if c.Compression == nil {
+		c.Compression = compression.NewDefaultConfig()
+	}
+	c.Compression.MinSize = minSize
+	return c
+}
+
+// WithCompressionLevel sets the compression level
+func (c *Config) WithCompressionLevel(level int) *Config {
+	if c.Compression == nil {
+		c.Compression = compression.NewDefaultConfig()
+	}
+	c.Compression.Level = level
 	return c
 }

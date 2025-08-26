@@ -7,7 +7,7 @@ import (
 
 // Entry represents a cache entry with value and TTL information
 type Entry struct {
-	// Value is the cached value
+	// Value is the cached value (may be compressed bytes if IsCompressed is true)
 	Value any
 
 	// ExpiresAt indicates when this entry expires (nil means no expiration)
@@ -20,6 +20,12 @@ type Entry struct {
 	// Protected by mu for concurrent access
 	AccessedAt time.Time
 	mu         sync.RWMutex
+
+	// Compression metadata
+	IsCompressed     bool   // Whether the value is compressed
+	CompressorName   string // Name of the compressor used (for debugging/metrics)
+	OriginalSize     int    // Original size before compression (0 if not compressed)
+	CompressedSize   int    // Size after compression (0 if not compressed)
 }
 
 // New creates a new cache entry with the given value and TTL
@@ -110,8 +116,40 @@ func (e *Entry) HasExpiry() bool {
 
 // String returns a string representation of the entry (for debugging)
 func (e *Entry) String() string {
-	if e.ExpiresAt == nil {
-		return "Entry{no-expiry}"
+	status := "Entry{"
+	if e.IsCompressed {
+		status += "compressed, "
 	}
-	return "Entry{expires: " + e.ExpiresAt.Format(time.RFC3339) + "}"
+	if e.ExpiresAt == nil {
+		status += "no-expiry}"
+	} else {
+		status += "expires: " + e.ExpiresAt.Format(time.RFC3339) + "}"
+	}
+	return status
+}
+
+// CompressionRatio returns the compression ratio (original/compressed)
+// Returns 1.0 if not compressed
+func (e *Entry) CompressionRatio() float64 {
+	if !e.IsCompressed || e.CompressedSize == 0 {
+		return 1.0
+	}
+	return float64(e.OriginalSize) / float64(e.CompressedSize)
+}
+
+// SpaceSaved returns the bytes saved through compression
+// Returns 0 if not compressed
+func (e *Entry) SpaceSaved() int {
+	if !e.IsCompressed {
+		return 0
+	}
+	return e.OriginalSize - e.CompressedSize
+}
+
+// SetCompressionInfo sets compression metadata for the entry
+func (e *Entry) SetCompressionInfo(compressorName string, originalSize, compressedSize int) {
+	e.IsCompressed = true
+	e.CompressorName = compressorName
+	e.OriginalSize = originalSize
+	e.CompressedSize = compressedSize
 }

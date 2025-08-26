@@ -3,6 +3,7 @@ package obcache
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/vnykmshr/obcache-go/internal/store"
 	"github.com/vnykmshr/obcache-go/internal/store/memory"
 	redisstore "github.com/vnykmshr/obcache-go/internal/store/redis"
+	"github.com/vnykmshr/obcache-go/pkg/compression"
+	"github.com/vnykmshr/obcache-go/pkg/metrics"
 )
 
 // Context keys for cache-specific metadata
@@ -72,12 +75,21 @@ func newCacheCallContext(options ...CacheOption) *CacheCallContext {
 
 // Cache is the main cache implementation with LRU and TTL support
 type Cache struct {
-	config *Config
-	store  store.Store
-	stats  *Stats
-	hooks  *Hooks
-	sf     *singleflight.Group[string, any]
-	mu     sync.RWMutex
+	config        *Config
+	store         store.Store
+	stats         *Stats
+	hooks         *Hooks
+	sf            *singleflight.Group[string, any]
+	mu            sync.RWMutex
+	
+	// Compression
+	compressor compression.Compressor
+	
+	// Metrics
+	metricsExporter metrics.Exporter
+	metricsLabels   metrics.Labels
+	metricsStop     chan struct{}
+	metricsWg       sync.WaitGroup
 }
 
 // New creates a new Cache instance with the given configuration
@@ -109,6 +121,16 @@ func New(config *Config) (*Cache, error) {
 		stats:  &Stats{},
 		hooks:  config.Hooks,
 		sf:     &singleflight.Group[string, any]{},
+	}
+
+	// Initialize compression if configured
+	if err := cache.initializeCompression(); err != nil {
+		return nil, fmt.Errorf("failed to initialize compression: %w", err)
+	}
+
+	// Initialize metrics if configured
+	if err := cache.initializeMetrics(); err != nil {
+		return nil, fmt.Errorf("failed to initialize metrics: %w", err)
 	}
 
 	// Set up store callbacks for statistics and hooks
@@ -178,6 +200,11 @@ func createRedisStore(config *Config) (store.Store, error) {
 
 // Get retrieves a value from the cache by key
 func (c *Cache) Get(key string, options ...CacheOption) (any, bool) {
+	start := time.Now()
+	defer func() {
+		c.recordCacheOperation(metrics.OperationGet, time.Since(start))
+	}()
+
 	cctx := newCacheCallContext(options...)
 
 	c.mu.RLock()
@@ -192,33 +219,45 @@ func (c *Cache) Get(key string, options ...CacheOption) (any, bool) {
 		return nil, false
 	}
 
-	c.stats.incHits()
-	if c.hooks != nil {
-		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, entry.Value, cctx.args)
+	// Decompress value if needed
+	value, err := c.decompressValue(entry)
+	if err != nil {
+		// If decompression fails, treat as cache miss
+		c.stats.incMisses()
+		return nil, false
 	}
 
-	return entry.Value, true
+	c.stats.incHits()
+	if c.hooks != nil {
+		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, value, cctx.args)
+	}
+
+	return value, true
 }
 
 // Set stores a value in the cache with the specified key and TTL
 // If ttl is 0 or negative, the default TTL from config is used
 // If both are 0 or negative, the entry never expires
 func (c *Cache) Set(key string, value any, ttl time.Duration, _ ...CacheOption) error {
+	start := time.Now()
+	defer func() {
+		c.recordCacheOperation(metrics.OperationSet, time.Since(start))
+	}()
+
 	if ttl <= 0 {
 		ttl = c.config.DefaultTTL
 	}
 
-	var cacheEntry *entry.Entry
-	if ttl > 0 {
-		cacheEntry = entry.New(value, ttl)
-	} else {
-		cacheEntry = entry.NewWithoutTTL(value)
+	// Prepare entry with compression if enabled
+	cacheEntry, err := c.createCompressedEntry(value, ttl)
+	if err != nil {
+		return fmt.Errorf("failed to create compressed entry: %w", err)
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	err := c.store.Set(key, cacheEntry)
+	err = c.store.Set(key, cacheEntry)
 	if err == nil {
 		c.updateKeyCount()
 	}
@@ -338,6 +377,17 @@ func (c *Cache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Stop metrics reporting if running
+	if c.metricsStop != nil {
+		close(c.metricsStop)
+		c.metricsWg.Wait()
+	}
+
+	// Close metrics exporter
+	if c.metricsExporter != nil {
+		c.metricsExporter.Close()
+	}
+
 	return c.store.Close()
 }
 
@@ -368,4 +418,190 @@ func (c *Cache) getKeyGenFunc() KeyGenFunc {
 		return c.config.KeyGenFunc
 	}
 	return DefaultKeyFunc
+}
+
+// createCompressedEntry creates a cache entry with compression if applicable
+func (c *Cache) createCompressedEntry(value any, ttl time.Duration) (*entry.Entry, error) {
+	var cacheEntry *entry.Entry
+	if ttl > 0 {
+		cacheEntry = entry.New(nil, ttl) // We'll set the value after compression
+	} else {
+		cacheEntry = entry.NewWithoutTTL(nil)
+	}
+
+	// Only try compression if it's enabled
+	if c.config.Compression != nil && c.config.Compression.Enabled {
+		// Serialize and compress the value
+		compressed, isCompressed, err := compression.SerializeAndCompress(
+			value, 
+			c.compressor, 
+			c.config.Compression.MinSize,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if isCompressed {
+			// Store compressed data and metadata
+			cacheEntry.Value = compressed
+			
+			// Calculate original size by serializing without compression
+			serialized, _, serErr := compression.SerializeAndCompress(value, compression.NewNoOpCompressor(), 0)
+			originalSize := len(serialized)
+			if serErr != nil {
+				// Fallback to approximate size if serialization fails
+				originalSize = c.approximateSize(value)
+			}
+			
+			cacheEntry.SetCompressionInfo(c.compressor.Name(), originalSize, len(compressed))
+		} else {
+			// Store uncompressed data
+			cacheEntry.Value = compressed // This is actually the uncompressed serialized data
+		}
+	} else {
+		// No compression, store value directly
+		cacheEntry.Value = value
+	}
+
+	return cacheEntry, nil
+}
+
+// decompressValue decompresses a cached value if needed
+func (c *Cache) decompressValue(entry *entry.Entry) (any, error) {
+	// Check if compression was used during storage
+	if c.config.Compression != nil && c.config.Compression.Enabled {
+		// Value was stored with compression logic (might be compressed or serialized)
+		data, ok := entry.Value.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("serialized value is not []byte")
+		}
+
+		var result any
+		err := compression.DecompressAndDeserialize(data, entry.IsCompressed, c.compressor, &result)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize value: %w", err)
+		}
+
+		return result, nil
+	} else {
+		// No compression was configured, return value directly
+		return entry.Value, nil
+	}
+}
+
+// approximateSize estimates the memory size of a value
+func (c *Cache) approximateSize(value any) int {
+	if value == nil {
+		return 0
+	}
+	
+	switch v := value.(type) {
+	case string:
+		return len(v)
+	case []byte:
+		return len(v)
+	case int, int8, int16, int32, int64:
+		return 8
+	case uint, uint8, uint16, uint32, uint64:
+		return 8
+	case float32:
+		return 4
+	case float64:
+		return 8
+	case bool:
+		return 1
+	default:
+		// For complex types, use reflection to estimate
+		rv := reflect.ValueOf(value)
+		switch rv.Kind() {
+		case reflect.Slice, reflect.Array:
+			return rv.Len() * 8 // Rough estimate
+		case reflect.Map:
+			return rv.Len() * 16 // Rough estimate for key-value pairs
+		case reflect.Struct:
+			return rv.NumField() * 8 // Rough estimate
+		default:
+			return 64 // Default fallback
+		}
+	}
+}
+
+// initializeCompression sets up compression if enabled
+func (c *Cache) initializeCompression() error {
+	if c.config.Compression == nil {
+		c.config.Compression = compression.NewDefaultConfig()
+	}
+
+	compressor, err := compression.NewCompressor(c.config.Compression)
+	if err != nil {
+		return fmt.Errorf("failed to create compressor: %w", err)
+	}
+
+	c.compressor = compressor
+	return nil
+}
+
+// initializeMetrics sets up metrics collection if enabled
+func (c *Cache) initializeMetrics() error {
+	if c.config.Metrics == nil || !c.config.Metrics.Enabled || c.config.Metrics.Exporter == nil {
+		c.metricsExporter = metrics.NewNoOpExporter()
+		return nil
+	}
+
+	c.metricsExporter = c.config.Metrics.Exporter
+	
+	// Prepare metrics labels with cache name
+	c.metricsLabels = make(metrics.Labels)
+	if c.config.Metrics.CacheName != "" {
+		c.metricsLabels["cache_name"] = c.config.Metrics.CacheName
+	} else {
+		c.metricsLabels["cache_name"] = "default"
+	}
+	
+	// Add any additional labels from config
+	for k, v := range c.config.Metrics.Labels {
+		c.metricsLabels[k] = v
+	}
+
+	// Start automatic stats reporting if interval is configured
+	if c.config.Metrics.ReportingInterval > 0 {
+		c.metricsStop = make(chan struct{})
+		c.metricsWg.Add(1)
+		go c.metricsReporter()
+	}
+
+	return nil
+}
+
+// metricsReporter periodically exports cache statistics
+func (c *Cache) metricsReporter() {
+	defer c.metricsWg.Done()
+	
+	ticker := time.NewTicker(c.config.Metrics.ReportingInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.exportCurrentStats()
+		case <-c.metricsStop:
+			// Final stats export before shutting down
+			c.exportCurrentStats()
+			return
+		}
+	}
+}
+
+// exportCurrentStats exports the current statistics to metrics
+func (c *Cache) exportCurrentStats() {
+	if c.metricsExporter != nil {
+		c.metricsExporter.ExportStats(c.stats, c.metricsLabels)
+	}
+}
+
+// recordCacheOperation records a cache operation with timing for metrics
+func (c *Cache) recordCacheOperation(operation metrics.Operation, duration time.Duration) {
+	if c.metricsExporter != nil {
+		c.metricsExporter.RecordCacheOperation(operation, duration, c.metricsLabels)
+	}
 }
