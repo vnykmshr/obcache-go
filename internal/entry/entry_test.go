@@ -201,7 +201,7 @@ func TestString(t *testing.T) {
 	}
 }
 
-func TestConcurrentTouch(t *testing.T) {
+func TestConcurrentTouch(_ *testing.T) {
 	entry := New("value", time.Hour)
 
 	// Test concurrent access to Touch method
@@ -222,7 +222,7 @@ func TestConcurrentTouch(t *testing.T) {
 	// Should complete without race conditions
 }
 
-func TestConcurrentTimeSinceLastAccess(t *testing.T) {
+func TestConcurrentTimeSinceLastAccess(_ *testing.T) {
 	entry := New("value", time.Hour)
 
 	// Test concurrent access to TimeSinceLastAccess method

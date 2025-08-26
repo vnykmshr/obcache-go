@@ -44,14 +44,21 @@ const (
 	EvictReasonCapacity
 )
 
+// String representations for EvictReason
+const (
+	evictReasonLRUString      = "LRU"
+	evictReasonTTLString      = "TTL"
+	evictReasonCapacityString = "Capacity"
+)
+
 func (r EvictReason) String() string {
 	switch r {
 	case EvictReasonLRU:
-		return "LRU"
+		return evictReasonLRUString
 	case EvictReasonTTL:
-		return "TTL"
+		return evictReasonTTLString
 	case EvictReasonCapacity:
-		return "Capacity"
+		return evictReasonCapacityString
 	default:
 		return "Unknown"
 	}

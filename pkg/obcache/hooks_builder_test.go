@@ -11,7 +11,7 @@ func TestHooksBuilder(t *testing.T) {
 
 	// Test AddOnHit
 	hitCalled := false
-	hooks.AddOnHit(func(key string, value any) {
+	hooks.AddOnHit(func(_ string, _ any) {
 		hitCalled = true
 	})
 
@@ -21,7 +21,7 @@ func TestHooksBuilder(t *testing.T) {
 
 	// Test AddOnMiss
 	missCalled := false
-	hooks.AddOnMiss(func(key string) {
+	hooks.AddOnMiss(func(_ string) {
 		missCalled = true
 	})
 
@@ -31,7 +31,7 @@ func TestHooksBuilder(t *testing.T) {
 
 	// Test AddOnEvict
 	evictCalled := false
-	hooks.AddOnEvict(func(key string, value any, reason EvictReason) {
+	hooks.AddOnEvict(func(_ string, _ any, _ EvictReason) {
 		evictCalled = true
 	})
 
@@ -41,7 +41,7 @@ func TestHooksBuilder(t *testing.T) {
 
 	// Test AddOnInvalidate
 	invalidateCalled := false
-	hooks.AddOnInvalidate(func(key string) {
+	hooks.AddOnInvalidate(func(_ string) {
 		invalidateCalled = true
 	})
 
@@ -98,10 +98,10 @@ func TestHooksBuilderMultiple(t *testing.T) {
 
 	// Add multiple hooks of same type
 	hitCount := 0
-	hooks.AddOnHit(func(key string, value any) {
+	hooks.AddOnHit(func(_ string, _ any) {
 		hitCount++
 	})
-	hooks.AddOnHit(func(key string, value any) {
+	hooks.AddOnHit(func(_ string, _ any) {
 		hitCount++
 	})
 

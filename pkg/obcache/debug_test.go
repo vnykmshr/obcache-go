@@ -10,6 +10,26 @@ import (
 )
 
 func TestDebugHandler(t *testing.T) {
+	_, handler := setupDebugHandlerTest(t)
+
+	t.Run("StatsOnly", func(t *testing.T) {
+		testStatsEndpoint(t, handler)
+	})
+
+	t.Run("KeysEndpoint", func(t *testing.T) {
+		testKeysEndpoint(t, handler)
+	})
+
+	t.Run("RootEndpoint", func(t *testing.T) {
+		testRootEndpoint(t, handler)
+	})
+
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		testMethodNotAllowed(t, handler)
+	})
+}
+
+func setupDebugHandlerTest(t *testing.T) (*Cache, http.Handler) {
 	cache, err := New(NewDefaultConfig())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -24,131 +44,141 @@ func TestDebugHandler(t *testing.T) {
 	_, _ = cache.Get("key1")    // hit
 	_, _ = cache.Get("missing") // miss
 
-	handler := cache.DebugHandler()
+	return cache, cache.DebugHandler()
+}
 
-	t.Run("StatsOnly", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/stats", nil)
-		w := httptest.NewRecorder()
+func testStatsEndpoint(t *testing.T, handler http.Handler) {
+	req := httptest.NewRequest("GET", "/stats", nil)
+	w := httptest.NewRecorder()
 
-		handler.ServeHTTP(w, req)
+	handler.ServeHTTP(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Fatalf("Expected status 200, got %d", w.Code)
+	assertStatusOK(t, w)
+	assertJSONContentType(t, w)
+
+	response := decodeDebugResponse(t, w)
+	validateStatsResponse(t, response)
+}
+
+func testKeysEndpoint(t *testing.T, handler http.Handler) {
+	req := httptest.NewRequest("GET", "/keys", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assertStatusOK(t, w)
+	response := decodeDebugResponse(t, w)
+	validateKeysResponse(t, response)
+}
+
+func testRootEndpoint(t *testing.T, handler http.Handler) {
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	assertStatusOK(t, w)
+	response := decodeDebugResponse(t, w)
+
+	// Root endpoint should behave like /keys
+	if len(response.Keys) != 3 {
+		t.Fatalf("Expected 3 keys, got %d", len(response.Keys))
+	}
+}
+
+func testMethodNotAllowed(t *testing.T, handler http.Handler) {
+	req := httptest.NewRequest("POST", "/stats", strings.NewReader("test"))
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected status 405, got %d", w.Code)
+	}
+}
+
+func assertStatusOK(t *testing.T, w *httptest.ResponseRecorder) {
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+}
+
+func assertJSONContentType(t *testing.T, w *httptest.ResponseRecorder) {
+	if w.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("Expected JSON content type, got %s", w.Header().Get("Content-Type"))
+	}
+}
+
+func decodeDebugResponse(t *testing.T, w *httptest.ResponseRecorder) DebugResponse {
+	var response DebugResponse
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	return response
+}
+
+func validateStatsResponse(t *testing.T, response DebugResponse) {
+	// Check stats
+	if response.Stats.Hits != 1 {
+		t.Fatalf("Expected 1 hit, got %d", response.Stats.Hits)
+	}
+	if response.Stats.Misses != 1 {
+		t.Fatalf("Expected 1 miss, got %d", response.Stats.Misses)
+	}
+	if response.Stats.Total != 2 {
+		t.Fatalf("Expected 2 total requests, got %d", response.Stats.Total)
+	}
+	if response.Stats.HitRate != 50.0 {
+		t.Fatalf("Expected 50%% hit rate, got %f", response.Stats.HitRate)
+	}
+
+	// Should not include keys
+	if len(response.Keys) != 0 {
+		t.Fatalf("Expected no keys in /stats endpoint, got %d", len(response.Keys))
+	}
+
+	// Check config
+	if response.Stats.Config.MaxEntries != 1000 {
+		t.Fatalf("Expected MaxEntries 1000, got %d", response.Stats.Config.MaxEntries)
+	}
+	if response.Stats.Config.DefaultTTL != 5*time.Minute {
+		t.Fatalf("Expected DefaultTTL 5m, got %v", response.Stats.Config.DefaultTTL)
+	}
+}
+
+func validateKeysResponse(t *testing.T, response DebugResponse) {
+	// Should include keys
+	if len(response.Keys) != 3 {
+		t.Fatalf("Expected 3 keys, got %d", len(response.Keys))
+	}
+
+	// Check key metadata
+	keyFound := false
+	for _, key := range response.Keys {
+		if key.Key == "key1" {
+			keyFound = true
+			validateKeyMetadata(t, key)
 		}
+	}
 
-		if w.Header().Get("Content-Type") != "application/json" {
-			t.Fatalf("Expected JSON content type, got %s", w.Header().Get("Content-Type"))
-		}
+	if !keyFound {
+		t.Fatal("key1 not found in response")
+	}
+}
 
-		var response DebugResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		// Check stats
-		if response.Stats.Hits != 1 {
-			t.Fatalf("Expected 1 hit, got %d", response.Stats.Hits)
-		}
-		if response.Stats.Misses != 1 {
-			t.Fatalf("Expected 1 miss, got %d", response.Stats.Misses)
-		}
-		if response.Stats.Total != 2 {
-			t.Fatalf("Expected 2 total requests, got %d", response.Stats.Total)
-		}
-		if response.Stats.HitRate != 50.0 {
-			t.Fatalf("Expected 50%% hit rate, got %f", response.Stats.HitRate)
-		}
-
-		// Should not include keys
-		if len(response.Keys) != 0 {
-			t.Fatalf("Expected no keys in /stats endpoint, got %d", len(response.Keys))
-		}
-
-		// Check config
-		if response.Stats.Config.MaxEntries != 1000 {
-			t.Fatalf("Expected MaxEntries 1000, got %d", response.Stats.Config.MaxEntries)
-		}
-		if response.Stats.Config.DefaultTTL != 5*time.Minute {
-			t.Fatalf("Expected DefaultTTL 5m, got %v", response.Stats.Config.DefaultTTL)
-		}
-	})
-
-	t.Run("KeysEndpoint", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/keys", nil)
-		w := httptest.NewRecorder()
-
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Fatalf("Expected status 200, got %d", w.Code)
-		}
-
-		var response DebugResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		// Should include keys
-		if len(response.Keys) != 3 {
-			t.Fatalf("Expected 3 keys, got %d", len(response.Keys))
-		}
-
-		// Check key metadata
-		keyFound := false
-		for _, key := range response.Keys {
-			if key.Key == "key1" {
-				keyFound = true
-				if key.Value != "value1" {
-					t.Fatalf("Expected value1, got %v", key.Value)
-				}
-				if key.ExpiresAt == nil {
-					t.Fatal("Expected expiration time for key1")
-				}
-				if key.TTL == "" {
-					t.Fatal("Expected TTL for key1")
-				}
-				if key.Age == "" {
-					t.Fatal("Expected age for key1")
-				}
-			}
-		}
-
-		if !keyFound {
-			t.Fatal("key1 not found in response")
-		}
-	})
-
-	t.Run("RootEndpoint", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-		w := httptest.NewRecorder()
-
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Fatalf("Expected status 200, got %d", w.Code)
-		}
-
-		var response DebugResponse
-		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-			t.Fatalf("Failed to decode response: %v", err)
-		}
-
-		// Root endpoint should behave like /keys
-		if len(response.Keys) != 3 {
-			t.Fatalf("Expected 3 keys, got %d", len(response.Keys))
-		}
-	})
-
-	t.Run("MethodNotAllowed", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/stats", strings.NewReader("test"))
-		w := httptest.NewRecorder()
-
-		handler.ServeHTTP(w, req)
-
-		if w.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("Expected status 405, got %d", w.Code)
-		}
-	})
+func validateKeyMetadata(t *testing.T, key DebugKey) {
+	if key.Value != "value1" {
+		t.Fatalf("Expected value1, got %v", key.Value)
+	}
+	if key.ExpiresAt == nil {
+		t.Fatal("Expected expiration time for key1")
+	}
+	if key.TTL == "" {
+		t.Fatal("Expected TTL for key1")
+	}
+	if key.Age == "" {
+		t.Fatal("Expected age for key1")
+	}
 }
 
 func TestDebugHandlerWithExpiredKeys(t *testing.T) {
