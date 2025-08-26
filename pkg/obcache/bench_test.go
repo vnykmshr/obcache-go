@@ -54,10 +54,10 @@ func multiParamFunction(a int, b string, c bool) string {
 
 func BenchmarkCacheSet(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("key-%d", i)
 		cache.Set(key, i, time.Hour)
@@ -66,16 +66,16 @@ func BenchmarkCacheSet(b *testing.B) {
 
 func BenchmarkCacheGet(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	// Pre-populate cache
 	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("key-%d", i)
 		cache.Set(key, i, time.Hour)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("key-%d", i%1000)
 		cache.Get(key)
@@ -84,10 +84,10 @@ func BenchmarkCacheGet(b *testing.B) {
 
 func BenchmarkCacheGetMiss(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("missing-key-%d", i)
 		cache.Get(key)
@@ -99,7 +99,7 @@ func BenchmarkCacheGetMiss(b *testing.B) {
 func BenchmarkDirectFunction(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		expensiveComputation(i % 100)
 	}
@@ -108,10 +108,10 @@ func BenchmarkDirectFunction(b *testing.B) {
 func BenchmarkWrappedFunctionFirstCall(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		// Each call uses a different key, so no cache hits
 		wrappedFunc(i)
@@ -121,15 +121,15 @@ func BenchmarkWrappedFunctionFirstCall(b *testing.B) {
 func BenchmarkWrappedFunctionCached(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		wrappedFunc(i)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		// All calls will hit cache
 		wrappedFunc(i % 100)
@@ -139,10 +139,10 @@ func BenchmarkWrappedFunctionCached(b *testing.B) {
 func BenchmarkWrappedFunctionMixed(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		// 80% cache hits, 20% misses
 		if i%5 == 0 {
@@ -158,10 +158,10 @@ func BenchmarkWrappedFunctionMixed(b *testing.B) {
 func BenchmarkWrappedFunctionWithError(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputationWithError)
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 100)
 	}
@@ -170,15 +170,15 @@ func BenchmarkWrappedFunctionWithError(b *testing.B) {
 func BenchmarkWrappedFunctionWithErrorCached(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputationWithError)
-	
+
 	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		wrappedFunc(i)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 100)
 	}
@@ -189,7 +189,7 @@ func BenchmarkWrappedFunctionWithErrorCached(b *testing.B) {
 func BenchmarkDirectStringFunction(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		expensiveStringOperation(fmt.Sprintf("input-%d", i%100))
 	}
@@ -198,15 +198,15 @@ func BenchmarkDirectStringFunction(b *testing.B) {
 func BenchmarkWrappedStringFunction(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveStringOperation)
-	
+
 	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		wrappedFunc(fmt.Sprintf("input-%d", i))
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(fmt.Sprintf("input-%d", i%100))
 	}
@@ -217,7 +217,7 @@ func BenchmarkWrappedStringFunction(b *testing.B) {
 func BenchmarkDirectMultiParamFunction(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		multiParamFunction(i%100, fmt.Sprintf("str-%d", i%10), i%2 == 0)
 	}
@@ -226,17 +226,17 @@ func BenchmarkDirectMultiParamFunction(b *testing.B) {
 func BenchmarkWrappedMultiParamFunction(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, multiParamFunction)
-	
+
 	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		for j := 0; j < 10; j++ {
 			wrappedFunc(i, fmt.Sprintf("str-%d", j), i%2 == 0)
 		}
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i%100, fmt.Sprintf("str-%d", i%10), i%2 == 0)
 	}
@@ -246,15 +246,15 @@ func BenchmarkWrappedMultiParamFunction(b *testing.B) {
 
 func BenchmarkConcurrentCacheGet(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	// Pre-populate cache
 	for i := 0; i < 1000; i++ {
 		cache.Set(fmt.Sprintf("key-%d", i), i, time.Hour)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -267,10 +267,10 @@ func BenchmarkConcurrentCacheGet(b *testing.B) {
 
 func BenchmarkConcurrentCacheSet(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -284,15 +284,15 @@ func BenchmarkConcurrentCacheSet(b *testing.B) {
 func BenchmarkConcurrentWrappedFunction(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		wrappedFunc(i)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -306,7 +306,7 @@ func BenchmarkConcurrentWrappedFunction(b *testing.B) {
 
 func BenchmarkSingleflightBenefit(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	// Function that takes some time and counts calls
 	callCount := int64(0)
 	slowFunc := func(n int) int {
@@ -314,24 +314,24 @@ func BenchmarkSingleflightBenefit(b *testing.B) {
 		time.Sleep(time.Microsecond * 100) // Simulate slow operation
 		return n * 2
 	}
-	
+
 	wrappedFunc := Wrap(cache, slowFunc)
-	
+
 	b.ResetTimer()
-	
+
 	// Launch multiple goroutines calling the same function concurrently
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			wrappedFunc(42) // All goroutines call with same argument
 		}
 	})
-	
+
 	// The number of actual function calls should be much less than b.N
 	// due to singleflight deduplication
 	b.Logf("Total benchmark iterations: %d", b.N)
 	b.Logf("Actual function calls: %d", atomic.LoadInt64(&callCount))
-	b.Logf("Singleflight effectiveness: %.2f%%", 
-		(1.0 - float64(atomic.LoadInt64(&callCount))/float64(b.N)) * 100)
+	b.Logf("Singleflight effectiveness: %.2f%%",
+		(1.0-float64(atomic.LoadInt64(&callCount))/float64(b.N))*100)
 }
 
 // Benchmark: Different TTL Strategies
@@ -339,10 +339,10 @@ func BenchmarkSingleflightBenefit(b *testing.B) {
 func BenchmarkShortTTL(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation, WithTTL(time.Millisecond))
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 10)
 		// Some entries will expire between calls
@@ -352,10 +352,10 @@ func BenchmarkShortTTL(b *testing.B) {
 func BenchmarkLongTTL(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation, WithTTL(time.Hour))
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 10)
 	}
@@ -367,10 +367,10 @@ func BenchmarkSmallCache(b *testing.B) {
 	config := NewDefaultConfig().WithMaxEntries(10)
 	cache, _ := New(config)
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 100) // More keys than cache size
 	}
@@ -380,10 +380,10 @@ func BenchmarkLargeCache(b *testing.B) {
 	config := NewDefaultConfig().WithMaxEntries(10000)
 	cache, _ := New(config)
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 100) // Much fewer keys than cache size
 	}
@@ -393,17 +393,17 @@ func BenchmarkLargeCache(b *testing.B) {
 
 func BenchmarkWithDefaultKeyFunc(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	wrappedFunc := Wrap(cache, expensiveComputation, 
+	wrappedFunc := Wrap(cache, expensiveComputation,
 		WithKeyFunc(DefaultKeyFunc))
-	
+
 	// Pre-populate
 	for i := 0; i < 100; i++ {
 		wrappedFunc(i)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 100)
 	}
@@ -411,17 +411,17 @@ func BenchmarkWithDefaultKeyFunc(b *testing.B) {
 
 func BenchmarkWithSimpleKeyFunc(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	wrappedFunc := Wrap(cache, expensiveComputation, 
+	wrappedFunc := Wrap(cache, expensiveComputation,
 		WithKeyFunc(SimpleKeyFunc))
-	
+
 	// Pre-populate
 	for i := 0; i < 100; i++ {
 		wrappedFunc(i)
 	}
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		wrappedFunc(i % 100)
 	}
@@ -431,10 +431,10 @@ func BenchmarkWithSimpleKeyFunc(b *testing.B) {
 
 func BenchmarkCacheMemoryUsage(b *testing.B) {
 	cache, _ := New(NewDefaultConfig())
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		// Set and get operations
 		key := fmt.Sprintf("key-%d", i%1000)
@@ -448,7 +448,7 @@ func BenchmarkCacheMemoryUsage(b *testing.B) {
 func BenchmarkWebServerSimulation(b *testing.B) {
 	// Simulate a web server with cached database queries
 	cache, _ := New(NewDefaultConfig().WithMaxEntries(500))
-	
+
 	// Simulate database query
 	dbQuery := func(userID int) map[string]interface{} {
 		time.Sleep(time.Microsecond * 50) // Simulate DB latency
@@ -458,12 +458,12 @@ func BenchmarkWebServerSimulation(b *testing.B) {
 			"email": fmt.Sprintf("user%d@example.com", userID),
 		}
 	}
-	
+
 	cachedDBQuery := Wrap(cache, dbQuery, WithTTL(5*time.Minute))
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	// Simulate realistic request pattern (Zipfian distribution)
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
@@ -475,7 +475,7 @@ func BenchmarkWebServerSimulation(b *testing.B) {
 			} else {
 				userID = 20 + (i % 480) // Less popular users
 			}
-			
+
 			cachedDBQuery(userID)
 			i++
 		}
@@ -486,46 +486,46 @@ func BenchmarkWebServerSimulation(b *testing.B) {
 
 func BenchmarkCacheEffectivenessComparison(b *testing.B) {
 	// This benchmark compares the same workload with and without caching
-	
+
 	// Setup
 	cache, _ := New(NewDefaultConfig())
 	wrappedFunc := Wrap(cache, expensiveComputation)
-	
+
 	// Pre-populate cache for realistic hit rates
 	for i := 0; i < 50; i++ {
 		wrappedFunc(i)
 	}
-	
+
 	b.Run("CPUBound-Uncached", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			expensiveComputation(i % 50)
 		}
 	})
-	
+
 	b.Run("CPUBound-Cached", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			wrappedFunc(i % 50)
 		}
 	})
-	
+
 	// I/O bound operations show cache benefits better
 	ioCache, _ := New(NewDefaultConfig())
 	wrappedIOFunc := Wrap(ioCache, expensiveIOOperation)
-	
+
 	// Pre-populate cache
 	for i := 0; i < 10; i++ {
 		wrappedIOFunc(i)
 	}
-	
+
 	b.Run("IOBound-Uncached", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			expensiveIOOperation(i % 10)
 		}
 	})
-	
+
 	b.Run("IOBound-Cached", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {

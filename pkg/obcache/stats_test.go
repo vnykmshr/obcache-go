@@ -8,7 +8,7 @@ import (
 
 func TestStatsInitialState(t *testing.T) {
 	stats := &Stats{}
-	
+
 	if hits := stats.Hits(); hits != 0 {
 		t.Fatalf("Expected 0 initial hits, got %d", hits)
 	}
@@ -37,42 +37,42 @@ func TestStatsInitialState(t *testing.T) {
 
 func TestStatsIncrement(t *testing.T) {
 	stats := &Stats{}
-	
+
 	// Test hit increment
 	stats.incHits()
 	if hits := stats.Hits(); hits != 1 {
 		t.Fatalf("Expected 1 hit after increment, got %d", hits)
 	}
-	
+
 	// Test miss increment
 	stats.incMisses()
 	if misses := stats.Misses(); misses != 1 {
 		t.Fatalf("Expected 1 miss after increment, got %d", misses)
 	}
-	
+
 	// Test eviction increment
 	stats.incEvictions()
 	if evictions := stats.Evictions(); evictions != 1 {
 		t.Fatalf("Expected 1 eviction after increment, got %d", evictions)
 	}
-	
+
 	// Test invalidation increment
 	stats.incInvalidations()
 	if invalidations := stats.Invalidations(); invalidations != 1 {
 		t.Fatalf("Expected 1 invalidation after increment, got %d", invalidations)
 	}
-	
+
 	// Test in-flight increment and decrement
 	stats.incInFlight()
 	if inFlight := stats.InFlight(); inFlight != 1 {
 		t.Fatalf("Expected 1 in-flight after increment, got %d", inFlight)
 	}
-	
+
 	stats.decInFlight()
 	if inFlight := stats.InFlight(); inFlight != 0 {
 		t.Fatalf("Expected 0 in-flight after decrement, got %d", inFlight)
 	}
-	
+
 	// Test key count set
 	stats.setKeyCount(5)
 	if keyCount := stats.KeyCount(); keyCount != 5 {
@@ -82,18 +82,18 @@ func TestStatsIncrement(t *testing.T) {
 
 func TestStatsCalculations(t *testing.T) {
 	stats := &Stats{}
-	
+
 	// Add some hits and misses
 	stats.incHits()
 	stats.incHits()
 	stats.incHits()
 	stats.incMisses()
-	
+
 	// Test total
 	if total := stats.Total(); total != 4 {
 		t.Fatalf("Expected 4 total requests, got %d", total)
 	}
-	
+
 	// Test hit rate (3 hits out of 4 total = 75%)
 	expectedHitRate := 75.0
 	if hitRate := stats.HitRate(); hitRate != expectedHitRate {
@@ -103,19 +103,19 @@ func TestStatsCalculations(t *testing.T) {
 
 func TestStatsHitRateEdgeCases(t *testing.T) {
 	stats := &Stats{}
-	
+
 	// Test hit rate with no requests
 	if hitRate := stats.HitRate(); hitRate != 0 {
 		t.Fatalf("Expected 0 hit rate with no requests, got %f", hitRate)
 	}
-	
+
 	// Test hit rate with only hits
 	stats.incHits()
 	stats.incHits()
 	if hitRate := stats.HitRate(); hitRate != 100.0 {
 		t.Fatalf("Expected 100%% hit rate with only hits, got %f", hitRate)
 	}
-	
+
 	// Test hit rate with only misses
 	stats2 := &Stats{}
 	stats2.incMisses()
@@ -127,7 +127,7 @@ func TestStatsHitRateEdgeCases(t *testing.T) {
 
 func TestStatsReset(t *testing.T) {
 	stats := &Stats{}
-	
+
 	// Add some data
 	stats.incHits()
 	stats.incMisses()
@@ -135,15 +135,15 @@ func TestStatsReset(t *testing.T) {
 	stats.incInvalidations()
 	stats.incInFlight()
 	stats.setKeyCount(10)
-	
+
 	// Verify data exists
 	if total := stats.Total(); total == 0 {
 		t.Fatal("Expected some data before reset")
 	}
-	
+
 	// Reset
 	stats.Reset()
-	
+
 	// Verify all values are zero
 	if hits := stats.Hits(); hits != 0 {
 		t.Fatalf("Expected 0 hits after reset, got %d", hits)
@@ -167,14 +167,14 @@ func TestStatsReset(t *testing.T) {
 
 func TestStatsConcurrency(t *testing.T) {
 	stats := &Stats{}
-	
+
 	var wg sync.WaitGroup
 	numGoroutines := 100
 	numOperations := 1000
-	
+
 	// Concurrent increments
 	wg.Add(numGoroutines * 4) // 4 types of operations
-	
+
 	// Hits
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -184,7 +184,7 @@ func TestStatsConcurrency(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	// Misses
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -194,7 +194,7 @@ func TestStatsConcurrency(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	// Evictions
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -204,7 +204,7 @@ func TestStatsConcurrency(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	// Invalidations
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -214,9 +214,9 @@ func TestStatsConcurrency(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	wg.Wait()
-	
+
 	// Verify final counts
 	expectedCount := int64(numGoroutines * numOperations)
 	if hits := stats.Hits(); hits != expectedCount {
@@ -235,13 +235,13 @@ func TestStatsConcurrency(t *testing.T) {
 
 func TestStatsInFlightConcurrency(t *testing.T) {
 	stats := &Stats{}
-	
+
 	var wg sync.WaitGroup
 	numGoroutines := 50
-	
+
 	// Concurrent increment/decrement of in-flight counter
 	wg.Add(numGoroutines * 2)
-	
+
 	// Increment
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -249,7 +249,7 @@ func TestStatsInFlightConcurrency(t *testing.T) {
 			stats.incInFlight()
 		}()
 	}
-	
+
 	// Decrement
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
@@ -257,9 +257,9 @@ func TestStatsInFlightConcurrency(t *testing.T) {
 			stats.decInFlight()
 		}()
 	}
-	
+
 	wg.Wait()
-	
+
 	// Should balance out to zero
 	if inFlight := stats.InFlight(); inFlight != 0 {
 		t.Fatalf("Expected 0 in-flight after balanced inc/dec, got %d", inFlight)
@@ -272,9 +272,9 @@ func TestStatsIntegrationWithCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	// Test various operations and verify stats
-	
+
 	// Miss
 	_, found := cache.Get("key1")
 	if found {
@@ -284,7 +284,7 @@ func TestStatsIntegrationWithCache(t *testing.T) {
 	if stats.Misses() != 1 {
 		t.Fatalf("Expected 1 miss, got %d", stats.Misses())
 	}
-	
+
 	// Set and Hit
 	cache.Set("key1", "value1", time.Hour)
 	_, found = cache.Get("key1")
@@ -298,19 +298,19 @@ func TestStatsIntegrationWithCache(t *testing.T) {
 	if stats.KeyCount() != 1 {
 		t.Fatalf("Expected 1 key, got %d", stats.KeyCount())
 	}
-	
+
 	// Invalidate
 	cache.Invalidate("key1")
 	stats = cache.Stats()
 	if stats.Invalidations() != 1 {
 		t.Fatalf("Expected 1 invalidation, got %d", stats.Invalidations())
 	}
-	
+
 	// Test eviction by filling cache
 	cache.Set("key1", "value1", time.Hour)
 	cache.Set("key2", "value2", time.Hour)
 	cache.Set("key3", "value3", time.Hour) // Should evict key1
-	
+
 	stats = cache.Stats()
 	if stats.Evictions() == 0 {
 		t.Fatal("Expected at least 1 eviction")

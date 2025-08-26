@@ -17,7 +17,7 @@ func TestCacheBasicOperations(t *testing.T) {
 	// Test Set and Get
 	key := "test-key"
 	value := "test-value"
-	
+
 	err = cache.Set(key, value, time.Hour)
 	if err != nil {
 		t.Fatalf("Set failed: %v", err)
@@ -63,10 +63,10 @@ func TestCacheInvalidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	key := "test-key"
 	cache.Set(key, "value", time.Hour)
-	
+
 	// Verify it exists
 	_, found := cache.Get(key)
 	if !found {
@@ -96,7 +96,7 @@ func TestCacheWarmup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	key := "test-key"
 	value := "warmed-value"
 
@@ -121,7 +121,7 @@ func TestCacheWarmupWithTTL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	key := "test-key"
 	value := "warmed-value"
 	customTTL := 30 * time.Minute
@@ -147,21 +147,21 @@ func TestCacheTTL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	key := "test-key"
 	shortTTL := 10 * time.Millisecond
-	
+
 	cache.Set(key, "value", shortTTL)
-	
+
 	// Should exist immediately
 	_, found := cache.Get(key)
 	if !found {
 		t.Fatal("Expected key to exist immediately")
 	}
-	
+
 	// Wait for expiration
 	time.Sleep(shortTTL + 5*time.Millisecond)
-	
+
 	// Should be expired
 	_, found = cache.Get(key)
 	if found {
@@ -176,20 +176,20 @@ func TestCacheEviction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	// Add entries to fill cache
 	cache.Set("key1", "value1", time.Hour)
 	cache.Set("key2", "value2", time.Hour)
-	
+
 	// Add third entry to trigger eviction
 	cache.Set("key3", "value3", time.Hour)
-	
+
 	// key1 should be evicted (LRU)
 	_, found := cache.Get("key1")
 	if found {
 		t.Fatal("Expected key1 to be evicted")
 	}
-	
+
 	// key2 and key3 should exist
 	_, found = cache.Get("key2")
 	if !found {
@@ -212,7 +212,7 @@ func TestCacheConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	var wg sync.WaitGroup
 	numGoroutines := 100
 	numOperations := 100
@@ -229,7 +229,7 @@ func TestCacheConcurrency(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	// Concurrent reads
 	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
@@ -243,7 +243,7 @@ func TestCacheConcurrency(t *testing.T) {
 	}
 
 	wg.Wait()
-	
+
 	// Verify stats are consistent
 	stats := cache.Stats()
 	total := stats.Hits() + stats.Misses()
@@ -257,22 +257,22 @@ func TestCacheReset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
-	
+
 	// Add some data and operations
 	cache.Set("key1", "value1", time.Hour)
 	cache.Set("key2", "value2", time.Hour)
 	cache.Get("key1")
 	cache.Get("nonexistent")
 	cache.Invalidate("key2")
-	
+
 	stats := cache.Stats()
 	if stats.Total() == 0 {
 		t.Fatal("Expected some operations before reset")
 	}
-	
+
 	// Reset stats
 	stats.Reset()
-	
+
 	// Verify all stats are zero
 	if stats.Hits() != 0 {
 		t.Fatalf("Expected 0 hits after reset, got %d", stats.Hits())
