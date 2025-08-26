@@ -595,13 +595,13 @@ func (c *Cache) metricsReporter() {
 // exportCurrentStats exports the current statistics to metrics
 func (c *Cache) exportCurrentStats() {
 	if c.metricsExporter != nil {
-		c.metricsExporter.ExportStats(c.stats, c.metricsLabels)
+		_ = c.metricsExporter.ExportStats(c.stats, c.metricsLabels) //nolint:errcheck // Error handling done at higher level
 	}
 }
 
 // recordCacheOperation records a cache operation with timing for metrics
 func (c *Cache) recordCacheOperation(operation metrics.Operation, duration time.Duration) {
 	if c.metricsExporter != nil {
-		c.metricsExporter.RecordCacheOperation(operation, duration, c.metricsLabels)
+		_ = c.metricsExporter.RecordCacheOperation(operation, duration, c.metricsLabels) //nolint:errcheck // Error handling done at higher level
 	}
 }

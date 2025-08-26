@@ -7,7 +7,7 @@ import (
 )
 
 // TestCacheOperationsTableDriven demonstrates consolidated testing using table-driven approach
-func TestCacheOperationsTableDriven(t *testing.T) {
+func TestCacheOperationsTableDriven(t *testing.T) { //nolint:gocyclo // Acceptable complexity for comprehensive table test
 	tests := []struct {
 		name        string
 		operation   string
@@ -66,11 +66,11 @@ func TestCacheOperationsTableDriven(t *testing.T) {
 			ttl:         time.Nanosecond, // Will expire immediately
 			expectFound: false,
 			expectError: false,
-			verify: func(t *testing.T, c *Cache, value interface{}, found bool, err error) {
+			verify: func(t *testing.T, c *Cache, _ interface{}, _ bool, _ error) {
 				// Add a small delay to ensure expiration
 				time.Sleep(time.Millisecond)
-				val, found := c.Get("expired-key")
-				if found {
+				val, isFound := c.Get("expired-key")
+				if isFound {
 					t.Errorf("Expected expired key to not be found, but got value: %v", val)
 				}
 			},

@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const expiredTTL = "expired"
+
 // DebugResponse represents the JSON response structure for debug endpoints
 type DebugResponse struct {
 	Stats *DebugStats `json:"stats"`
@@ -97,7 +99,7 @@ func (c *Cache) DebugHandler() http.Handler {
 						if ttl > 0 {
 							debugKey.TTL = formatDuration(ttl)
 						} else {
-							debugKey.TTL = "expired"
+							debugKey.TTL = expiredTTL
 						}
 					}
 
