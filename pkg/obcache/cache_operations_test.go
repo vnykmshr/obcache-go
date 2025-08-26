@@ -16,7 +16,7 @@ func TestCacheOperationsTableDriven(t *testing.T) {
 		ttl         time.Duration
 		expectFound bool
 		expectError bool
-		setup       func(*Cache) // Optional setup function
+		setup       func(*Cache)                                       // Optional setup function
 		verify      func(*testing.T, *Cache, interface{}, bool, error) // Custom verification
 	}{
 		{

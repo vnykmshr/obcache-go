@@ -347,7 +347,7 @@ func TestHooksPriorityOrdering(t *testing.T) {
 
 func TestHooksConditionalExecution(t *testing.T) {
 	type debugKey string
-	
+
 	hooks := &Hooks{}
 	var metricsExecuted, debugExecuted bool
 

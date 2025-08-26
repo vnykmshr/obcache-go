@@ -562,7 +562,7 @@ func BenchmarkHooksWithLegacyHooks(b *testing.B) {
 	hooks := &Hooks{}
 	hooks.AddOnHit(func(string, any) {})
 	hooks.AddOnMiss(func(string) {})
-	
+
 	cache, err := New(NewDefaultConfig().WithHooks(hooks))
 	if err != nil {
 		b.Fatal(err)
@@ -584,7 +584,7 @@ func BenchmarkHooksWithPriorityHooks(b *testing.B) {
 	hooks.AddOnHitWithPriority(func(string, any) {}, HookPriorityMedium)
 	hooks.AddOnHitWithPriority(func(string, any) {}, HookPriorityLow)
 	hooks.AddOnMissWithPriority(func(string) {}, HookPriorityMedium)
-	
+
 	cache, err := New(NewDefaultConfig().WithHooks(hooks))
 	if err != nil {
 		b.Fatal(err)
@@ -602,11 +602,11 @@ func BenchmarkHooksWithPriorityHooks(b *testing.B) {
 
 func BenchmarkHooksWithConditionalHooks(b *testing.B) {
 	hooks := &Hooks{}
-	hooks.AddOnHitCtxIf(func(context.Context, string, any, []any) {}, 
+	hooks.AddOnHitCtxIf(func(context.Context, string, any, []any) {},
 		KeyPrefixCondition("key-"))
-	hooks.AddOnMissCtxIf(func(context.Context, string, []any) {}, 
+	hooks.AddOnMissCtxIf(func(context.Context, string, []any) {},
 		func(context.Context, string, []any) bool { return true })
-	
+
 	cache, err := New(NewDefaultConfig().WithHooks(hooks))
 	if err != nil {
 		b.Fatal(err)
@@ -631,9 +631,9 @@ func BenchmarkHooksComprehensive(b *testing.B) {
 	hooks.AddOnHitWithPriority(func(string, any) {}, HookPriorityHigh)
 	hooks.AddOnMissWithPriority(func(string) {}, HookPriorityLow)
 	// Conditional hooks
-	hooks.AddOnHitCtxIf(func(context.Context, string, any, []any) {}, 
+	hooks.AddOnHitCtxIf(func(context.Context, string, any, []any) {},
 		KeyPrefixCondition("key-"))
-	
+
 	cache, err := New(NewDefaultConfig().WithHooks(hooks))
 	if err != nil {
 		b.Fatal(err)
@@ -655,15 +655,15 @@ func BenchmarkHookConditionEvaluation(b *testing.B) {
 	andCondition := AndCondition(prefixCondition, contextCondition)
 
 	ctx := context.WithValue(context.Background(), "env", "prod")
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("api:endpoint-%d", i%100)
 		// Benchmark condition evaluation overhead
 		_ = prefixCondition(ctx, key, nil)
-		_ = contextCondition(ctx, key, nil) 
+		_ = contextCondition(ctx, key, nil)
 		_ = andCondition(ctx, key, nil)
 	}
 }
