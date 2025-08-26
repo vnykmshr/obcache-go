@@ -1,6 +1,7 @@
 package obcache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -409,5 +410,86 @@ func TestWrapConvenienceFunctions(t *testing.T) {
 	wrapped2 := WrapFunc2(cache, func2)
 	if result := wrapped2(3, 4); result != 7 {
 		t.Fatalf("WrapFunc2: expected 7, got %d", result)
+	}
+}
+
+func TestWrapContextAwareFunctions(t *testing.T) {
+	// Test context-aware wrapped functions with hooks
+	var hitCtx context.Context
+	var hitArgs []any
+	var missCtx context.Context
+	var missArgs []any
+
+	hooks := &Hooks{}
+	hooks.AddOnHitCtx(func(ctx context.Context, _ string, _ any, args []any) {
+		hitCtx = ctx
+		hitArgs = args
+	})
+	hooks.AddOnMissCtx(func(ctx context.Context, _ string, args []any) {
+		missCtx = ctx
+		missArgs = args
+	})
+
+	cache, err := New(NewDefaultConfig().WithHooks(hooks))
+	if err != nil {
+		t.Fatalf("Failed to create cache: %v", err)
+	}
+
+	// Test function with context.Context as first parameter
+	callCount := int32(0)
+	contextFunc := func(_ context.Context, x int) int {
+		atomic.AddInt32(&callCount, 1)
+		return x * 2
+	}
+
+	wrappedCtxFunc := Wrap(cache, contextFunc)
+
+	// Create context with test value
+	type testKey string
+	ctx := context.WithValue(context.Background(), testKey("testKey"), "testValue")
+
+	// First call - should miss and call original function
+	result1 := wrappedCtxFunc(ctx, 5)
+	if result1 != 10 {
+		t.Fatalf("Expected result 10, got %d", result1)
+	}
+	if callCount != 1 {
+		t.Fatalf("Expected function to be called once, called %d times", callCount)
+	}
+
+	// Check miss hook was called with correct context and args
+	if missCtx != ctx {
+		t.Fatal("Miss hook should have received the context")
+	}
+	if len(missArgs) != 1 || missArgs[0] != 5 {
+		t.Fatalf("Expected args [5], got %v", missArgs)
+	}
+
+	// Second call - should hit cache
+	result2 := wrappedCtxFunc(ctx, 5)
+	if result2 != 10 {
+		t.Fatalf("Expected cached result 10, got %d", result2)
+	}
+	if callCount != 1 {
+		t.Fatalf("Expected function to be called only once, called %d times", callCount)
+	}
+
+	// Check hit hook was called with correct context and args
+	if hitCtx != ctx {
+		t.Fatal("Hit hook should have received the context")
+	}
+	if len(hitArgs) != 1 || hitArgs[0] != 5 {
+		t.Fatalf("Expected args [5], got %v", hitArgs)
+	}
+
+	// Test function without context (should still work)
+	normalFunc := func(x int) int {
+		return x * 3
+	}
+	wrappedNormalFunc := Wrap(cache, normalFunc)
+
+	result3 := wrappedNormalFunc(4)
+	if result3 != 12 {
+		t.Fatalf("Expected result 12, got %d", result3)
 	}
 }

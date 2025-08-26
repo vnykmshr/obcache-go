@@ -1,6 +1,7 @@
 package obcache
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -175,3 +176,137 @@ func TestHooksBuilderChaining(t *testing.T) {
 		t.Fatal("Should have 1 OnInvalidate hook after chaining")
 	}
 }
+
+func TestHooksBuilderCtx(t *testing.T) {
+	hooks := setupContextHooks()
+	validateHookCounts(t, hooks)
+	testContextHooksWithCache(t, hooks)
+}
+
+func setupContextHooks() *Hooks {
+	hooks := &Hooks{}
+
+	hooks.AddOnHitCtx(func(ctx context.Context, key string, value any, args []any) {
+		// Store in global vars for validation (simplified for test)
+		hitCtx = ctx
+		hitKey = key
+		hitValue = value
+		hitArgs = args
+	})
+
+	hooks.AddOnMissCtx(func(ctx context.Context, key string, args []any) {
+		missCtx = ctx
+		missKey = key
+		missArgs = args
+	})
+
+	hooks.AddOnInvalidateCtx(func(ctx context.Context, key string, args []any) {
+		invalidateCtx = ctx
+		invalidateKey = key
+		invalidateArgs = args
+	})
+
+	return hooks
+}
+
+func validateHookCounts(t *testing.T, hooks *Hooks) {
+	if len(hooks.OnHitCtx) != 1 {
+		t.Fatal("AddOnHitCtx should add to OnHitCtx slice")
+	}
+	if len(hooks.OnMissCtx) != 1 {
+		t.Fatal("AddOnMissCtx should add to OnMissCtx slice")
+	}
+	if len(hooks.OnInvalidateCtx) != 1 {
+		t.Fatal("AddOnInvalidateCtx should add to OnInvalidateCtx slice")
+	}
+}
+
+func testContextHooksWithCache(t *testing.T, hooks *Hooks) {
+	cache := createCacheWithHooks(t, hooks)
+	testHitHook(t, cache)
+	testMissHook(t, cache)
+	testInvalidateHook(t, cache)
+}
+
+func createCacheWithHooks(t *testing.T, hooks *Hooks) *Cache {
+	config := NewDefaultConfig().WithHooks(hooks)
+	cache, err := New(config)
+	if err != nil {
+		t.Fatalf("Failed to create cache: %v", err)
+	}
+	return cache
+}
+
+func testHitHook(t *testing.T, cache *Cache) {
+	type testKey string
+	ctx := context.WithValue(context.Background(), testKey("testKey"), "testValue")
+	testArgs := []any{"arg1", "arg2"}
+
+	_ = cache.Set("test", "value", time.Hour)
+	_, _ = cache.Get("test", WithContext(ctx), WithArgs(testArgs))
+
+	if hitCtx != ctx {
+		t.Fatal("OnHitCtx hook should have received the context")
+	}
+	if hitKey != "test" {
+		t.Fatalf("Expected key 'test', got '%s'", hitKey)
+	}
+	if hitValue != "value" {
+		t.Fatalf("Expected value 'value', got '%v'", hitValue)
+	}
+	validateArgs(t, hitArgs, []any{"arg1", "arg2"})
+}
+
+func testMissHook(t *testing.T, cache *Cache) {
+	type testKey string
+	ctx := context.WithValue(context.Background(), testKey("missKey"), "missValue")
+	testArgs := []any{"miss1", "miss2"}
+
+	_, _ = cache.Get("missing", WithContext(ctx), WithArgs(testArgs))
+
+	if missCtx != ctx {
+		t.Fatal("OnMissCtx hook should have received the context")
+	}
+	if missKey != "missing" {
+		t.Fatalf("Expected key 'missing', got '%s'", missKey)
+	}
+	validateArgs(t, missArgs, []any{"miss1", "miss2"})
+}
+
+func testInvalidateHook(t *testing.T, cache *Cache) {
+	type testKey string
+	ctx := context.WithValue(context.Background(), testKey("invalidateKey"), "invalidateValue")
+	testArgs := []any{"inv1"}
+
+	_ = cache.Invalidate("test", WithContext(ctx), WithArgs(testArgs))
+
+	if invalidateCtx != ctx {
+		t.Fatal("OnInvalidateCtx hook should have received the context")
+	}
+	if invalidateKey != "test" {
+		t.Fatalf("Expected key 'test', got '%s'", invalidateKey)
+	}
+	if len(invalidateArgs) != 1 || invalidateArgs[0] != "inv1" {
+		t.Fatalf("Expected args [inv1], got %v", invalidateArgs)
+	}
+}
+
+// validateArgs is a helper function to validate argument slices
+func validateArgs(t *testing.T, actual, expected []any) {
+	if len(actual) != len(expected) {
+		t.Fatalf("Expected args length %d, got %d", len(expected), len(actual))
+	}
+	for i, expectedArg := range expected {
+		if actual[i] != expectedArg {
+			t.Fatalf("Expected arg[%d] = %v, got %v", i, expectedArg, actual[i])
+		}
+	}
+}
+
+// Global variables for test validation (simplified approach)
+var (
+	hitCtx, missCtx, invalidateCtx    context.Context
+	hitKey, missKey, invalidateKey    string
+	hitValue                          any
+	hitArgs, missArgs, invalidateArgs []any
+)

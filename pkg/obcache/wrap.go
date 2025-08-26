@@ -1,6 +1,7 @@
 package obcache
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -69,89 +70,132 @@ func wrapFunction[T any](cache *Cache, fn T, opts *WrapOptions) T {
 
 	// Create the wrapper function
 	wrapper := reflect.MakeFunc(fnType, func(args []reflect.Value) []reflect.Value {
-		// Convert args to interface{} slice for key generation
-		keyArgs := make([]any, len(args))
-		for i, arg := range args {
-			keyArgs[i] = arg.Interface()
-		}
-
-		// Generate cache key
-		key := opts.KeyFunc(keyArgs)
-
-		// If caching is disabled, call original function directly
-		if opts.DisableCache {
-			return fnValue.Call(args)
-		}
-
-		// Check if we're dealing with a function that returns (T, error) or just T
-		hasErrorReturn := fnType.NumOut() >= 2 &&
-			fnType.Out(fnType.NumOut()-1).Implements(reflect.TypeOf((*error)(nil)).Elem())
-
-		// Try to get from cache first
-		if cachedValue, found := cache.Get(key); found {
-			return convertCachedValue(cachedValue, fnType, hasErrorReturn)
-		}
-
-		// Use singleflight to prevent duplicate calls
-		compute := func() (any, error) {
-			results := fnValue.Call(args)
-
-			if hasErrorReturn {
-				// Handle (T, error) return pattern
-				errResult := results[len(results)-1]
-				if !errResult.IsNil() {
-					// Don't cache errors, return them directly
-					return nil, errResult.Interface().(error)
-				}
-
-				// Cache the successful result (all values except error)
-				if len(results) == 2 {
-					// Single value + error
-					return results[0].Interface(), nil
-				} else {
-					// Multiple values + error
-					values := make([]any, len(results)-1)
-					for i := 0; i < len(results)-1; i++ {
-						values[i] = results[i].Interface()
-					}
-					return values, nil
-				}
-			} else {
-				// Handle functions without error return
-				if len(results) == 1 {
-					return results[0].Interface(), nil
-				} else {
-					// Multiple return values
-					values := make([]any, len(results))
-					for i, result := range results {
-						values[i] = result.Interface()
-					}
-					return values, nil
-				}
-			}
-		}
-
-		// Execute with singleflight
-		cache.stats.incInFlight()
-		defer cache.stats.decInFlight()
-
-		value, err, shared := cache.sf.Do(key, compute)
-
-		if err != nil {
-			// Return the error in the function's expected format
-			return createErrorReturn(fnType, err)
-		}
-
-		// Store in cache if this wasn't a shared call
-		if !shared {
-			cache.Set(key, value, opts.TTL)
-		}
-
-		// Convert the result back to the expected format
-		return convertComputedValue(value, fnType, hasErrorReturn)
+		return executeWrappedFunction(cache, fnValue, fnType, opts, args)
 	})
 
 	return wrapper.Interface().(T)
+}
+
+// executeWrappedFunction handles the core wrapping logic
+func executeWrappedFunction(cache *Cache, fnValue reflect.Value, fnType reflect.Type, opts *WrapOptions, args []reflect.Value) []reflect.Value {
+	ctx, keyArgs := extractContextAndArgs(fnType, args)
+	key := opts.KeyFunc(keyArgs)
+
+	// If caching is disabled, call original function directly
+	if opts.DisableCache {
+		return fnValue.Call(args)
+	}
+
+	hasErrorReturn := hasErrorReturn(fnType)
+
+	// Try to get from cache first
+	if cachedValue, found := cache.Get(key, WithContext(ctx), WithArgs(keyArgs)); found {
+		return convertCachedValue(cachedValue, fnType, hasErrorReturn)
+	}
+
+	return executeFunctionWithSingleflight(cache, fnValue, fnType, opts, args, ctx, keyArgs, key, hasErrorReturn)
+}
+
+// extractContextAndArgs extracts context and key args from function arguments
+func extractContextAndArgs(fnType reflect.Type, args []reflect.Value) (context.Context, []any) {
+	ctx := context.Background()
+	var keyArgs []any
+
+	// Detect context.Context as first parameter
+	if len(args) > 0 && fnType.In(0).String() == "context.Context" {
+		// First parameter is context.Context
+		ctx = args[0].Interface().(context.Context)
+		// Use remaining args for key generation
+		keyArgs = make([]any, len(args)-1)
+		for i := 1; i < len(args); i++ {
+			keyArgs[i-1] = args[i].Interface()
+		}
+	} else {
+		// No context parameter, use all args for key generation
+		keyArgs = make([]any, len(args))
+		for i, arg := range args {
+			keyArgs[i] = arg.Interface()
+		}
+	}
+
+	return ctx, keyArgs
+}
+
+// hasErrorReturn checks if function returns error as last parameter
+func hasErrorReturn(fnType reflect.Type) bool {
+	return fnType.NumOut() >= 2 &&
+		fnType.Out(fnType.NumOut()-1).Implements(reflect.TypeOf((*error)(nil)).Elem())
+}
+
+// executeFunctionWithSingleflight executes the function with singleflight pattern
+func executeFunctionWithSingleflight(cache *Cache, fnValue reflect.Value, fnType reflect.Type, opts *WrapOptions, args []reflect.Value, ctx context.Context, keyArgs []any, key string, hasErrorReturn bool) []reflect.Value {
+	// Use singleflight to prevent duplicate calls
+	compute := func() (any, error) {
+		results := fnValue.Call(args)
+		return processResults(results, hasErrorReturn)
+	}
+
+	// Execute with singleflight
+	cache.stats.incInFlight()
+	defer cache.stats.decInFlight()
+
+	value, err, shared := cache.sf.Do(key, compute)
+
+	if err != nil {
+		// Return the error in the function's expected format
+		return createErrorReturn(fnType, err)
+	}
+
+	// Store in cache if this wasn't a shared call
+	if !shared {
+		cache.Set(key, value, opts.TTL, WithContext(ctx), WithArgs(keyArgs))
+	}
+
+	// Convert the result back to the expected format
+	return convertComputedValue(value, fnType, hasErrorReturn)
+}
+
+// processResults processes function results for caching
+func processResults(results []reflect.Value, hasErrorReturn bool) (any, error) {
+	if hasErrorReturn {
+		return processResultsWithError(results)
+	}
+	return processResultsWithoutError(results)
+}
+
+// processResultsWithError handles results from functions that return error
+func processResultsWithError(results []reflect.Value) (any, error) {
+	// Handle (T, error) return pattern
+	errResult := results[len(results)-1]
+	if !errResult.IsNil() {
+		// Don't cache errors, return them directly
+		return nil, errResult.Interface().(error)
+	}
+
+	// Cache the successful result (all values except error)
+	if len(results) == 2 {
+		// Single value + error
+		return results[0].Interface(), nil
+	}
+	// Multiple values + error
+	values := make([]any, len(results)-1)
+	for i := 0; i < len(results)-1; i++ {
+		values[i] = results[i].Interface()
+	}
+	return values, nil
+}
+
+// processResultsWithoutError handles results from functions without error return
+func processResultsWithoutError(results []reflect.Value) (any, error) {
+	if len(results) == 1 {
+		return results[0].Interface(), nil
+	}
+	// Multiple return values
+	values := make([]any, len(results))
+	for i, result := range results {
+		values[i] = result.Interface()
+	}
+	return values, nil
 }
 
 // convertCachedValue converts a cached value back to the expected return format

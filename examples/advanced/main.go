@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -69,6 +70,34 @@ func (s *UserService) GetUsersByRole(role string) ([]User, error) {
 	return users, nil
 }
 
+// GetUserWithContext is a context-aware version that demonstrates new hook features
+func (s *UserService) GetUserWithContext(ctx context.Context, id int) (*User, error) {
+	s.mu.Lock()
+	s.calls++
+	callNum := s.calls
+	s.mu.Unlock()
+
+	// Extract request metadata from context
+	requestID := "unknown"
+	if rid, ok := ctx.Value("requestID").(string); ok {
+		requestID = rid
+	}
+
+	fmt.Printf("📞 Database call #%d for user ID %d (request: %s)\n", callNum, id, requestID)
+	time.Sleep(100 * time.Millisecond)
+
+	if id == 999 {
+		return nil, fmt.Errorf("user %d not found", id)
+	}
+
+	return &User{
+		ID:       id,
+		Name:     fmt.Sprintf("User %d", id),
+		Email:    fmt.Sprintf("user%d@example.com", id),
+		LastSeen: time.Now().Add(-time.Duration(id) * time.Hour),
+	}, nil
+}
+
 func main() {
 	fmt.Println("🚀 Advanced obcache-go Example")
 	fmt.Println("============================")
@@ -93,6 +122,25 @@ func main() {
 		OnEvict: []obcache.OnEvictHook{
 			func(key string, value any, reason obcache.EvictReason) {
 				fmt.Printf("🗑️  Cache EVICT: %s (reason: %v)\n", key, reason)
+			},
+		},
+		// New context-aware hooks with function arguments
+		OnHitCtx: []obcache.OnHitHookCtx{
+			func(ctx context.Context, key string, value any, args []any) {
+				requestID := "unknown"
+				if rid, ok := ctx.Value("requestID").(string); ok {
+					requestID = rid
+				}
+				fmt.Printf("🎯 Context-aware HIT: %s (request: %s, args: %v)\n", key, requestID, args)
+			},
+		},
+		OnMissCtx: []obcache.OnMissHookCtx{
+			func(ctx context.Context, key string, args []any) {
+				requestID := "unknown"
+				if rid, ok := ctx.Value("requestID").(string); ok {
+					requestID = rid
+				}
+				fmt.Printf("🎯 Context-aware MISS: %s (request: %s, args: %v)\n", key, requestID, args)
 			},
 		},
 	}
@@ -131,6 +179,31 @@ func main() {
 	// Different user - cache miss
 	user2, _ := cachedGetUser(2)
 	fmt.Printf("👤 User: %s (%s)\n", user2.Name, user2.Email)
+
+	// Example 1.5: Context-aware wrapped functions
+	fmt.Println("\n🎯 Example 1.5: Context-aware Functions with Enhanced Hooks")
+
+	// Wrap the context-aware method
+	cachedGetUserWithContext := obcache.Wrap(cache, userService.GetUserWithContext)
+
+	// Create contexts with request metadata
+	ctx1 := context.WithValue(context.Background(), "requestID", "req-001")
+	ctx2 := context.WithValue(context.Background(), "requestID", "req-002")
+
+	// First call with context - cache miss
+	ctxUser1, err := cachedGetUserWithContext(ctx1, 10)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("👤 Context User: %s (%s)\n", ctxUser1.Name, ctxUser1.Email)
+
+	// Second call with same context and args - cache hit
+	ctxUser1Again, _ := cachedGetUserWithContext(ctx1, 10)
+	fmt.Printf("👤 Context User: %s (%s)\n", ctxUser1Again.Name, ctxUser1Again.Email)
+
+	// Third call with different context but same args - cache hit (context in hooks only)
+	ctxUser1Diff, _ := cachedGetUserWithContext(ctx2, 10)
+	fmt.Printf("👤 Context User: %s (%s)\n", ctxUser1Diff.Name, ctxUser1Diff.Email)
 
 	// Test role-based queries
 	fmt.Println("\n--- Role-based Queries ---")

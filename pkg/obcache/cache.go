@@ -1,6 +1,7 @@
 package obcache
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -9,6 +10,62 @@ import (
 	"github.com/vnykmshr/obcache-go/internal/store"
 	"github.com/vnykmshr/obcache-go/internal/store/memory"
 )
+
+// Context keys for cache-specific metadata
+type contextKey string
+
+const (
+	// CacheTagsKey can be used to store cache tags in context
+	CacheTagsKey contextKey = "cache_tags"
+)
+
+// CacheTagsFromContext extracts cache tags from context
+func CacheTagsFromContext(ctx context.Context) []string {
+	if tags, ok := ctx.Value(CacheTagsKey).([]string); ok {
+		return tags
+	}
+	return nil
+}
+
+// WithCacheTags adds cache tags to context
+func WithCacheTags(ctx context.Context, tags []string) context.Context {
+	return context.WithValue(ctx, CacheTagsKey, tags)
+}
+
+// CacheCallContext contains context and function arguments for cache operations
+type CacheCallContext struct {
+	ctx  context.Context
+	args []any
+}
+
+// CacheOption configures cache operation behavior
+type CacheOption func(*CacheCallContext)
+
+// WithContext sets the context for a cache operation
+func WithContext(ctx context.Context) CacheOption {
+	return func(cctx *CacheCallContext) {
+		cctx.ctx = ctx
+	}
+}
+
+// WithArgs sets the function arguments for a cache operation
+func WithArgs(args []any) CacheOption {
+	return func(cctx *CacheCallContext) {
+		cctx.args = args
+	}
+}
+
+// newCacheCallContext creates a new CacheCallContext with defaults
+func newCacheCallContext(options ...CacheOption) *CacheCallContext {
+	cctx := &CacheCallContext{
+		ctx:  context.Background(),
+		args: nil,
+	}
+	for _, opt := range options {
+		opt(cctx)
+	}
+	return cctx
+}
 
 // Cache is the main cache implementation with LRU and TTL support
 type Cache struct {
@@ -71,7 +128,9 @@ func New(config *Config) (*Cache, error) {
 }
 
 // Get retrieves a value from the cache by key
-func (c *Cache) Get(key string) (any, bool) {
+func (c *Cache) Get(key string, options ...CacheOption) (any, bool) {
+	cctx := newCacheCallContext(options...)
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -79,14 +138,14 @@ func (c *Cache) Get(key string) (any, bool) {
 	if !found {
 		c.stats.incMisses()
 		if c.hooks != nil {
-			c.hooks.invokeOnMiss(key)
+			c.hooks.invokeOnMissWithCtx(cctx.ctx, key, cctx.args)
 		}
 		return nil, false
 	}
 
 	c.stats.incHits()
 	if c.hooks != nil {
-		c.hooks.invokeOnHit(key, entry.Value)
+		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, entry.Value, cctx.args)
 	}
 
 	return entry.Value, true
@@ -95,7 +154,7 @@ func (c *Cache) Get(key string) (any, bool) {
 // Set stores a value in the cache with the specified key and TTL
 // If ttl is 0 or negative, the default TTL from config is used
 // If both are 0 or negative, the entry never expires
-func (c *Cache) Set(key string, value any, ttl time.Duration) error {
+func (c *Cache) Set(key string, value any, ttl time.Duration, _ ...CacheOption) error {
 	if ttl <= 0 {
 		ttl = c.config.DefaultTTL
 	}
@@ -129,7 +188,9 @@ func (c *Cache) WarmupWithTTL(key string, value any, ttl time.Duration) error {
 }
 
 // Invalidate removes a specific key from the cache
-func (c *Cache) Invalidate(key string) error {
+func (c *Cache) Invalidate(key string, options ...CacheOption) error {
+	cctx := newCacheCallContext(options...)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -139,7 +200,7 @@ func (c *Cache) Invalidate(key string) error {
 		c.updateKeyCount()
 
 		if c.hooks != nil {
-			c.hooks.invokeOnInvalidate(key)
+			c.hooks.invokeOnInvalidateWithCtx(cctx.ctx, key, cctx.args)
 		}
 	}
 
@@ -147,7 +208,9 @@ func (c *Cache) Invalidate(key string) error {
 }
 
 // InvalidateAll removes all entries from the cache
-func (c *Cache) InvalidateAll() error {
+func (c *Cache) InvalidateAll(options ...CacheOption) error {
+	cctx := newCacheCallContext(options...)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -157,7 +220,7 @@ func (c *Cache) InvalidateAll() error {
 		for _, key := range keys {
 			c.stats.incInvalidations()
 			if c.hooks != nil {
-				c.hooks.invokeOnInvalidate(key)
+				c.hooks.invokeOnInvalidateWithCtx(cctx.ctx, key, cctx.args)
 			}
 		}
 		c.updateKeyCount()
@@ -198,7 +261,9 @@ func (c *Cache) Has(key string) bool {
 }
 
 // GetWithTTL retrieves a value and its remaining TTL
-func (c *Cache) GetWithTTL(key string) (value any, ttl time.Duration, found bool) {
+func (c *Cache) GetWithTTL(key string, options ...CacheOption) (value any, ttl time.Duration, found bool) {
+	cctx := newCacheCallContext(options...)
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -206,14 +271,14 @@ func (c *Cache) GetWithTTL(key string) (value any, ttl time.Duration, found bool
 	if !found {
 		c.stats.incMisses()
 		if c.hooks != nil {
-			c.hooks.invokeOnMiss(key)
+			c.hooks.invokeOnMissWithCtx(cctx.ctx, key, cctx.args)
 		}
 		return nil, 0, false
 	}
 
 	c.stats.incHits()
 	if c.hooks != nil {
-		c.hooks.invokeOnHit(key, entry.Value)
+		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, entry.Value, cctx.args)
 	}
 
 	return entry.Value, entry.TTL(), true
