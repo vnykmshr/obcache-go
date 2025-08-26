@@ -9,9 +9,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	
+
 	"go.opentelemetry.io/otel"
-	
+
 	"github.com/vnykmshr/obcache-go/pkg/metrics"
 	"github.com/vnykmshr/obcache-go/pkg/obcache"
 )
@@ -27,13 +27,13 @@ type User struct {
 func fetchUserData(userID int) (*User, error) {
 	// Simulate database latency
 	time.Sleep(50 * time.Millisecond)
-	
+
 	user := &User{
 		ID:    userID,
 		Name:  fmt.Sprintf("User %d", userID),
 		Email: fmt.Sprintf("user%d@example.com", userID),
 	}
-	
+
 	return user, nil
 }
 
@@ -84,7 +84,7 @@ func prometheusExample() {
 
 	// Create cache with Prometheus metrics
 	cacheConfig := obcache.NewDefaultConfig().
-		WithDefaultTTL(5 * time.Minute).
+		WithDefaultTTL(5*time.Minute).
 		WithMetricsExporter(prometheusExporter, "user-cache")
 
 	cache, err := obcache.New(cacheConfig)
@@ -100,22 +100,22 @@ func prometheusExample() {
 	fmt.Println("📈 Generating cache activity for Prometheus metrics...")
 	for i := 1; i <= 10; i++ {
 		userID := (i % 3) + 1 // This will cause some cache hits
-		
+
 		start := time.Now()
 		user, err := cachedFetchUser(userID)
 		duration := time.Since(start)
-		
+
 		if err != nil {
 			log.Printf("Error fetching user: %v", err)
 			continue
 		}
-		
+
 		fmt.Printf("  User %d: %s (took %v)\n", user.ID, user.Name, duration)
 	}
 
 	// Show cache statistics
 	stats := cache.Stats()
-	fmt.Printf("📊 Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n", 
+	fmt.Printf("📊 Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n",
 		stats.Hits(), stats.Misses(), stats.HitRate())
 
 	// Start Prometheus HTTP server in background
@@ -158,7 +158,7 @@ func opentelemetryExample() {
 
 	// Create cache with OpenTelemetry metrics
 	cacheConfig := obcache.NewDefaultConfig().
-		WithDefaultTTL(10 * time.Minute).
+		WithDefaultTTL(10*time.Minute).
 		WithMetricsExporter(otelExporter, "product-cache").
 		WithMetricsReportingInterval(5 * time.Second)
 
@@ -170,7 +170,7 @@ func opentelemetryExample() {
 
 	// Simulate cache operations
 	fmt.Println("📊 Generating cache activity for OpenTelemetry metrics...")
-	
+
 	// Set some values
 	for i := 1; i <= 5; i++ {
 		cache.Set(fmt.Sprintf("product:%d", i), map[string]any{
@@ -183,7 +183,7 @@ func opentelemetryExample() {
 	// Get some values (mix of hits and misses)
 	for i := 1; i <= 8; i++ {
 		key := fmt.Sprintf("product:%d", i)
-		
+
 		if value, found := cache.Get(key); found {
 			product := value.(map[string]any)
 			fmt.Printf("  Found %s: $%.2f\n", product["name"], product["price"])
@@ -197,19 +197,19 @@ func opentelemetryExample() {
 	time.Sleep(6 * time.Second)
 
 	stats := cache.Stats()
-	fmt.Printf("📊 OTel Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n", 
+	fmt.Printf("📊 OTel Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n",
 		stats.Hits(), stats.Misses(), stats.HitRate())
 }
 
 func multiExporterExample() {
 	// Create both Prometheus and OpenTelemetry exporters
 	registry := prometheus.NewRegistry()
-	
+
 	promConfig := &metrics.PrometheusConfig{
-		Registry: registry,
+		Registry:      registry,
 		DefaultLabels: prometheus.Labels{"exporter": "multi"},
 	}
-	
+
 	metricsConfig := metrics.NewDefaultConfig()
 	promExporter, _ := metrics.NewPrometheusExporter(metricsConfig, promConfig)
 
@@ -244,12 +244,12 @@ func multiExporterExample() {
 	for i := 0; i < 20; i++ {
 		key := fmt.Sprintf("item:%d", i%5) // Create overlapping keys for hits
 		value := fmt.Sprintf("Item %d Data", i)
-		
+
 		// Set every 4th item
 		if i%4 == 0 {
 			cache.Set(key, value, 30*time.Second)
 		}
-		
+
 		// Try to get every item
 		if val, found := cache.Get(key); found {
 			fmt.Printf("  ✓ Cache hit for %s: %s\n", key, val)
@@ -260,7 +260,7 @@ func multiExporterExample() {
 
 	// Final stats
 	stats := cache.Stats()
-	fmt.Printf("📊 Multi-exporter Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n", 
+	fmt.Printf("📊 Multi-exporter Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n",
 		stats.Hits(), stats.Misses(), stats.HitRate())
 
 	fmt.Println("✅ Metrics exported to both Prometheus and OpenTelemetry!")

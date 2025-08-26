@@ -13,10 +13,10 @@ import (
 type Compressor interface {
 	// Compress compresses the given data and returns compressed bytes
 	Compress(data []byte) ([]byte, error)
-	
+
 	// Decompress decompresses the given compressed bytes
 	Decompress(compressed []byte) ([]byte, error)
-	
+
 	// Name returns the name/identifier of the compressor
 	Name() string
 }
@@ -34,14 +34,14 @@ const (
 type Config struct {
 	// Enabled determines whether compression is enabled
 	Enabled bool
-	
+
 	// Algorithm specifies which compression algorithm to use
 	Algorithm CompressorType
-	
+
 	// MinSize is the minimum size in bytes before compression is applied
 	// Values smaller than this will not be compressed to avoid overhead
 	MinSize int
-	
+
 	// Level is the compression level (1-9 for gzip/deflate, -1 for default)
 	Level int
 }
@@ -116,21 +116,21 @@ func NewGzipCompressor(level int) *GzipCompressor {
 // Compress compresses data using gzip
 func (g *GzipCompressor) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	
+
 	writer, err := gzip.NewWriterLevel(&buf, g.level)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip writer: %w", err)
 	}
-	
+
 	if _, err := writer.Write(data); err != nil {
 		writer.Close()
 		return nil, fmt.Errorf("failed to write compressed data: %w", err)
 	}
-	
+
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 	}
-	
+
 	return buf.Bytes(), nil
 }
 
@@ -141,12 +141,12 @@ func (g *GzipCompressor) Decompress(compressed []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer reader.Close()
-	
+
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read decompressed data: %w", err)
 	}
-	
+
 	return data, nil
 }
 
@@ -168,21 +168,21 @@ func NewDeflateCompressor(level int) *DeflateCompressor {
 // Compress compresses data using deflate
 func (d *DeflateCompressor) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	
+
 	writer, err := zlib.NewWriterLevel(&buf, d.level)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create deflate writer: %w", err)
 	}
-	
+
 	if _, err := writer.Write(data); err != nil {
 		writer.Close()
 		return nil, fmt.Errorf("failed to write compressed data: %w", err)
 	}
-	
+
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close deflate writer: %w", err)
 	}
-	
+
 	return buf.Bytes(), nil
 }
 
@@ -193,12 +193,12 @@ func (d *DeflateCompressor) Decompress(compressed []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create deflate reader: %w", err)
 	}
 	defer reader.Close()
-	
+
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read decompressed data: %w", err)
 	}
-	
+
 	return data, nil
 }
 
@@ -212,7 +212,7 @@ func NewCompressor(config *Config) (Compressor, error) {
 	if config == nil || !config.Enabled {
 		return NewNoOpCompressor(), nil
 	}
-	
+
 	switch config.Algorithm {
 	case CompressorNone:
 		return NewNoOpCompressor(), nil
@@ -232,22 +232,22 @@ func SerializeAndCompress(value any, compressor Compressor, minSize int) ([]byte
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to serialize value: %w", err)
 	}
-	
+
 	// Only compress if the serialized data meets the minimum size threshold
 	if len(serialized) < minSize {
 		return serialized, false, nil
 	}
-	
+
 	compressed, err := compressor.Compress(serialized)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to compress data: %w", err)
 	}
-	
+
 	// Only use compression if it actually reduces size
 	if len(compressed) >= len(serialized) {
 		return serialized, false, nil
 	}
-	
+
 	return compressed, true, nil
 }
 
@@ -255,7 +255,7 @@ func SerializeAndCompress(value any, compressor Compressor, minSize int) ([]byte
 func DecompressAndDeserialize(data []byte, isCompressed bool, compressor Compressor, target any) error {
 	var serialized []byte
 	var err error
-	
+
 	if isCompressed {
 		serialized, err = compressor.Decompress(data)
 		if err != nil {
@@ -264,12 +264,12 @@ func DecompressAndDeserialize(data []byte, isCompressed bool, compressor Compres
 	} else {
 		serialized = data
 	}
-	
+
 	// Deserialize using JSON
 	if err := json.Unmarshal(serialized, target); err != nil {
 		return fmt.Errorf("failed to deserialize value: %w", err)
 	}
-	
+
 	return nil
 }
 

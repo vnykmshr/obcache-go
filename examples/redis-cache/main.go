@@ -21,14 +21,14 @@ type User struct {
 func getUserFromDatabase(userID int) (*User, error) {
 	// Simulate database latency
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Simulate database query
 	user := &User{
 		ID:    userID,
 		Name:  fmt.Sprintf("User %d", userID),
 		Email: fmt.Sprintf("user%d@example.com", userID),
 	}
-	
+
 	return user, nil
 }
 
@@ -80,7 +80,7 @@ func basicRedisExample() {
 
 	// Show cache statistics
 	stats := cache.Stats()
-	fmt.Printf("📊 Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n", 
+	fmt.Printf("📊 Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n",
 		stats.Hits(), stats.Misses(), stats.HitRate())
 }
 
@@ -99,7 +99,7 @@ func functionWrappingExample() {
 	defer cache.Close()
 
 	// Wrap the expensive function with caching
-	cachedGetUser := obcache.Wrap(cache, getUserFromDatabase, 
+	cachedGetUser := obcache.Wrap(cache, getUserFromDatabase,
 		obcache.WithTTL(5*time.Minute))
 
 	// First call - will execute the function and cache the result
@@ -127,7 +127,7 @@ func functionWrappingExample() {
 
 	// Show cache statistics
 	stats := cache.Stats()
-	fmt.Printf("📊 Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n", 
+	fmt.Printf("📊 Cache Stats - Hits: %d, Misses: %d, Hit Rate: %.1f%%\n",
 		stats.Hits(), stats.Misses(), stats.HitRate())
 }
 

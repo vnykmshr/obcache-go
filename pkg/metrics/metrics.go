@@ -69,17 +69,17 @@ const (
 // MetricNames defines standard metric names used across exporters
 type MetricNames struct {
 	// Counters
-	CacheHitsTotal         string
-	CacheMissesTotal       string
-	CacheEvictionsTotal    string
+	CacheHitsTotal          string
+	CacheMissesTotal        string
+	CacheEvictionsTotal     string
 	CacheInvalidationsTotal string
-	CacheOperationsTotal   string
-	CacheErrorsTotal       string
+	CacheOperationsTotal    string
+	CacheErrorsTotal        string
 
 	// Histograms
 	CacheOperationDuration string
-	CacheKeySize          string
-	CacheValueSize        string
+	CacheKeySize           string
+	CacheValueSize         string
 
 	// Gauges
 	CacheKeysCount        string
@@ -91,17 +91,17 @@ type MetricNames struct {
 func DefaultMetricNames() MetricNames {
 	return MetricNames{
 		CacheHitsTotal:          "obcache_hits_total",
-		CacheMissesTotal:        "obcache_misses_total", 
+		CacheMissesTotal:        "obcache_misses_total",
 		CacheEvictionsTotal:     "obcache_evictions_total",
 		CacheInvalidationsTotal: "obcache_invalidations_total",
 		CacheOperationsTotal:    "obcache_operations_total",
 		CacheErrorsTotal:        "obcache_errors_total",
-		CacheOperationDuration: "obcache_operation_duration_seconds",
-		CacheKeySize:           "obcache_key_size_bytes",
-		CacheValueSize:         "obcache_value_size_bytes",
-		CacheKeysCount:         "obcache_keys_count",
-		CacheInFlightRequests:  "obcache_inflight_requests",
-		CacheHitRate:           "obcache_hit_rate",
+		CacheOperationDuration:  "obcache_operation_duration_seconds",
+		CacheKeySize:            "obcache_key_size_bytes",
+		CacheValueSize:          "obcache_value_size_bytes",
+		CacheKeysCount:          "obcache_keys_count",
+		CacheInFlightRequests:   "obcache_inflight_requests",
+		CacheHitRate:            "obcache_hit_rate",
 	}
 }
 
@@ -226,7 +226,7 @@ func (m *MultiExporter) RecordHistogram(name string, value float64, labels Label
 	return nil
 }
 
-// SetGauge sets on all configured exporters  
+// SetGauge sets on all configured exporters
 func (m *MultiExporter) SetGauge(name string, value float64, labels Labels) error {
 	for _, exporter := range m.exporters {
 		if err := exporter.SetGauge(name, value, labels); err != nil {

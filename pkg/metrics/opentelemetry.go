@@ -17,20 +17,20 @@ type OpenTelemetryExporter struct {
 	ctx    context.Context
 
 	// Standard metrics instruments
-	hitsCounter         metric.Int64Counter
-	missesCounter       metric.Int64Counter
-	evictionsCounter    metric.Int64Counter
+	hitsCounter          metric.Int64Counter
+	missesCounter        metric.Int64Counter
+	evictionsCounter     metric.Int64Counter
 	invalidationsCounter metric.Int64Counter
-	operationsCounter   metric.Int64Counter
-	errorsCounter       metric.Int64Counter
+	operationsCounter    metric.Int64Counter
+	errorsCounter        metric.Int64Counter
 
-	operationDuration  metric.Float64Histogram
+	operationDuration metric.Float64Histogram
 	keySize           metric.Int64Histogram
 	valueSize         metric.Int64Histogram
 
-	keysGauge          metric.Int64Gauge
-	inFlightGauge      metric.Int64Gauge
-	hitRateGauge       metric.Float64Gauge
+	keysGauge     metric.Int64Gauge
+	inFlightGauge metric.Int64Gauge
+	hitRateGauge  metric.Float64Gauge
 
 	// Custom metrics (for IncrementCounter, etc.)
 	customCounters   map[string]metric.Int64Counter
@@ -230,7 +230,7 @@ func (o *OpenTelemetryExporter) ExportStats(stats Stats, labels Labels) error {
 // RecordCacheOperation records a cache operation with timing
 func (o *OpenTelemetryExporter) RecordCacheOperation(operation Operation, duration time.Duration, labels Labels) error {
 	attrs := o.convertLabels(labels)
-	
+
 	// Add operation to attributes
 	opAttrs := make([]attribute.KeyValue, len(attrs)+1)
 	copy(opAttrs, attrs)
@@ -331,19 +331,19 @@ func (o *OpenTelemetryExporter) convertLabels(labels Labels) []attribute.KeyValu
 	if labels == nil {
 		return []attribute.KeyValue{}
 	}
-	
+
 	attrs := make([]attribute.KeyValue, 0, len(labels)+len(o.config.Labels))
-	
+
 	// Add config labels first
 	for k, v := range o.config.Labels {
 		attrs = append(attrs, attribute.String(k, v))
 	}
-	
+
 	// Add provided labels
 	for k, v := range labels {
 		attrs = append(attrs, attribute.String(k, v))
 	}
-	
+
 	return attrs
 }
 

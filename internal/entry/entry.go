@@ -22,10 +22,10 @@ type Entry struct {
 	mu         sync.RWMutex
 
 	// Compression metadata
-	IsCompressed     bool   // Whether the value is compressed
-	CompressorName   string // Name of the compressor used (for debugging/metrics)
-	OriginalSize     int    // Original size before compression (0 if not compressed)
-	CompressedSize   int    // Size after compression (0 if not compressed)
+	IsCompressed   bool   // Whether the value is compressed
+	CompressorName string // Name of the compressor used (for debugging/metrics)
+	OriginalSize   int    // Original size before compression (0 if not compressed)
+	CompressedSize int    // Size after compression (0 if not compressed)
 }
 
 // New creates a new cache entry with the given value and TTL

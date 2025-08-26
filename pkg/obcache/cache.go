@@ -75,16 +75,16 @@ func newCacheCallContext(options ...CacheOption) *CacheCallContext {
 
 // Cache is the main cache implementation with LRU and TTL support
 type Cache struct {
-	config        *Config
-	store         store.Store
-	stats         *Stats
-	hooks         *Hooks
-	sf            *singleflight.Group[string, any]
-	mu            sync.RWMutex
-	
+	config *Config
+	store  store.Store
+	stats  *Stats
+	hooks  *Hooks
+	sf     *singleflight.Group[string, any]
+	mu     sync.RWMutex
+
 	// Compression
 	compressor compression.Compressor
-	
+
 	// Metrics
 	metricsExporter metrics.Exporter
 	metricsLabels   metrics.Labels
@@ -433,8 +433,8 @@ func (c *Cache) createCompressedEntry(value any, ttl time.Duration) (*entry.Entr
 	if c.config.Compression != nil && c.config.Compression.Enabled {
 		// Serialize and compress the value
 		compressed, isCompressed, err := compression.SerializeAndCompress(
-			value, 
-			c.compressor, 
+			value,
+			c.compressor,
 			c.config.Compression.MinSize,
 		)
 		if err != nil {
@@ -444,7 +444,7 @@ func (c *Cache) createCompressedEntry(value any, ttl time.Duration) (*entry.Entr
 		if isCompressed {
 			// Store compressed data and metadata
 			cacheEntry.Value = compressed
-			
+
 			// Calculate original size by serializing without compression
 			serialized, _, serErr := compression.SerializeAndCompress(value, compression.NewNoOpCompressor(), 0)
 			originalSize := len(serialized)
@@ -452,7 +452,7 @@ func (c *Cache) createCompressedEntry(value any, ttl time.Duration) (*entry.Entr
 				// Fallback to approximate size if serialization fails
 				originalSize = c.approximateSize(value)
 			}
-			
+
 			cacheEntry.SetCompressionInfo(c.compressor.Name(), originalSize, len(compressed))
 		} else {
 			// Store uncompressed data
@@ -494,7 +494,7 @@ func (c *Cache) approximateSize(value any) int {
 	if value == nil {
 		return 0
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		return len(v)
@@ -549,7 +549,7 @@ func (c *Cache) initializeMetrics() error {
 	}
 
 	c.metricsExporter = c.config.Metrics.Exporter
-	
+
 	// Prepare metrics labels with cache name
 	c.metricsLabels = make(metrics.Labels)
 	if c.config.Metrics.CacheName != "" {
@@ -557,7 +557,7 @@ func (c *Cache) initializeMetrics() error {
 	} else {
 		c.metricsLabels["cache_name"] = "default"
 	}
-	
+
 	// Add any additional labels from config
 	for k, v := range c.config.Metrics.Labels {
 		c.metricsLabels[k] = v
@@ -576,7 +576,7 @@ func (c *Cache) initializeMetrics() error {
 // metricsReporter periodically exports cache statistics
 func (c *Cache) metricsReporter() {
 	defer c.metricsWg.Done()
-	
+
 	ticker := time.NewTicker(c.config.Metrics.ReportingInterval)
 	defer ticker.Stop()
 

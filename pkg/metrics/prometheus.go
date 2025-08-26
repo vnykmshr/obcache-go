@@ -14,17 +14,17 @@ type PrometheusExporter struct {
 	registry prometheus.Registerer
 
 	// Counters
-	hitsTotal         *prometheus.CounterVec
-	missesTotal       *prometheus.CounterVec
-	evictionsTotal    *prometheus.CounterVec
+	hitsTotal          *prometheus.CounterVec
+	missesTotal        *prometheus.CounterVec
+	evictionsTotal     *prometheus.CounterVec
 	invalidationsTotal *prometheus.CounterVec
-	operationsTotal   *prometheus.CounterVec
-	errorsTotal       *prometheus.CounterVec
+	operationsTotal    *prometheus.CounterVec
+	errorsTotal        *prometheus.CounterVec
 
 	// Histograms
 	operationDuration *prometheus.HistogramVec
-	keySize          *prometheus.HistogramVec
-	valueSize        *prometheus.HistogramVec
+	keySize           *prometheus.HistogramVec
+	valueSize         *prometheus.HistogramVec
 
 	// Gauges
 	keysCount        *prometheus.GaugeVec
@@ -242,7 +242,7 @@ func (p *PrometheusExporter) IncrementCounter(name string, labels Labels) error 
 	if !exists {
 		labelNames := p.getLabelNames(labels)
 		defaultLabels := p.convertLabelsToPromLabels(p.config.Labels)
-		
+
 		var err error
 		counter, err = p.createCounterVec(name, fmt.Sprintf("Custom counter: %s", name), labelNames, defaultLabels)
 		if err != nil {
@@ -266,7 +266,7 @@ func (p *PrometheusExporter) RecordHistogram(name string, value float64, labels 
 		labelNames := p.getLabelNames(labels)
 		defaultLabels := p.convertLabelsToPromLabels(p.config.Labels)
 		buckets := prometheus.DefBuckets
-		
+
 		var err error
 		histogram, err = p.createHistogramVec(name, fmt.Sprintf("Custom histogram: %s", name), labelNames, defaultLabels, buckets)
 		if err != nil {
@@ -289,7 +289,7 @@ func (p *PrometheusExporter) SetGauge(name string, value float64, labels Labels)
 	if !exists {
 		labelNames := p.getLabelNames(labels)
 		defaultLabels := p.convertLabelsToPromLabels(p.config.Labels)
-		
+
 		var err error
 		gauge, err = p.createGaugeVec(name, fmt.Sprintf("Custom gauge: %s", name), labelNames, defaultLabels)
 		if err != nil {
@@ -369,7 +369,7 @@ func (p *PrometheusExporter) convertLabels(labels Labels) prometheus.Labels {
 	if labels == nil {
 		return prometheus.Labels{}
 	}
-	
+
 	promLabels := make(prometheus.Labels)
 	for k, v := range labels {
 		promLabels[k] = v
@@ -381,7 +381,7 @@ func (p *PrometheusExporter) convertLabelsToPromLabels(labels Labels) prometheus
 	if labels == nil {
 		return prometheus.Labels{}
 	}
-	
+
 	promLabels := make(prometheus.Labels)
 	for k, v := range labels {
 		promLabels[k] = v

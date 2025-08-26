@@ -122,7 +122,7 @@ func NewRedisConfig(addr string) *Config {
 		StoreType:       StoreTypeRedis,
 		MaxEntries:      0, // Not applicable for Redis
 		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 0, // Redis handles TTL automatically
+		CleanupInterval: 0,   // Redis handles TTL automatically
 		KeyGenFunc:      nil, // will use DefaultKeyFunc
 		Hooks:           &Hooks{},
 		Redis: &RedisConfig{
@@ -138,7 +138,7 @@ func NewRedisConfigWithClient(client redis.Cmdable) *Config {
 		StoreType:       StoreTypeRedis,
 		MaxEntries:      0, // Not applicable for Redis
 		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 0, // Redis handles TTL automatically
+		CleanupInterval: 0,   // Redis handles TTL automatically
 		KeyGenFunc:      nil, // will use DefaultKeyFunc
 		Hooks:           &Hooks{},
 		Redis: &RedisConfig{

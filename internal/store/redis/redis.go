@@ -28,23 +28,23 @@ type Store struct {
 type Config struct {
 	// Client is the Redis client to use
 	Client redis.Cmdable
-	
+
 	// KeyPrefix is prepended to all cache keys to avoid conflicts
 	KeyPrefix string
-	
+
 	// DefaultTTL is the default TTL for entries without explicit expiration
 	DefaultTTL time.Duration
-	
+
 	// Context for Redis operations
 	Context context.Context
 }
 
 // SerializedEntry represents an entry as stored in Redis
 type SerializedEntry struct {
-	Value     json.RawMessage `json:"value"`
-	CreatedAt time.Time       `json:"created_at"`
-	ExpiresAt *time.Time      `json:"expires_at,omitempty"`
-	LastAccess time.Time      `json:"last_access"`
+	Value      json.RawMessage `json:"value"`
+	CreatedAt  time.Time       `json:"created_at"`
+	ExpiresAt  *time.Time      `json:"expires_at,omitempty"`
+	LastAccess time.Time       `json:"last_access"`
 }
 
 // New creates a new Redis store with the given configuration
@@ -52,24 +52,24 @@ func New(config *Config) (*Store, error) {
 	if config.Client == nil {
 		return nil, fmt.Errorf("redis client is required")
 	}
-	
+
 	ctx := config.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	
+
 	keyPrefix := config.KeyPrefix
 	if keyPrefix == "" {
 		keyPrefix = "obcache:"
 	}
-	
+
 	s := &Store{
 		client:     config.Client,
 		keyPrefix:  keyPrefix,
 		defaultTTL: config.DefaultTTL,
 		ctx:        ctx,
 	}
-	
+
 	return s, nil
 }
 
@@ -77,7 +77,7 @@ func New(config *Config) (*Store, error) {
 func (s *Store) Get(key string) (*entry.Entry, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	redisKey := s.buildKey(key)
 	result := s.client.Get(s.ctx, redisKey)
 	if result.Err() != nil {
@@ -86,12 +86,12 @@ func (s *Store) Get(key string) (*entry.Entry, bool) {
 		}
 		return nil, false // Other Redis errors treated as miss
 	}
-	
+
 	data, err := result.Result()
 	if err != nil {
 		return nil, false
 	}
-	
+
 	// Deserialize the entry
 	entry, err := s.deserializeEntry([]byte(data))
 	if err != nil {
@@ -99,23 +99,23 @@ func (s *Store) Get(key string) (*entry.Entry, bool) {
 		s.client.Del(s.ctx, redisKey)
 		return nil, false
 	}
-	
+
 	// Check if entry has expired
 	if entry.IsExpired() {
 		// Remove expired entry
 		s.client.Del(s.ctx, redisKey)
-		
+
 		// Call cleanup callback if set
 		if s.cleanupCallback != nil {
 			go s.cleanupCallback(key, entry.Value)
 		}
 		return nil, false
 	}
-	
+
 	// Update last access time and save back to Redis
 	entry.Touch()
 	s.saveEntryToRedis(redisKey, entry)
-	
+
 	return entry, true
 }
 
@@ -123,7 +123,7 @@ func (s *Store) Get(key string) (*entry.Entry, bool) {
 func (s *Store) Set(key string, entry *entry.Entry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	redisKey := s.buildKey(key)
 	return s.saveEntryToRedis(redisKey, entry)
 }
@@ -132,7 +132,7 @@ func (s *Store) Set(key string, entry *entry.Entry) error {
 func (s *Store) Delete(key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	redisKey := s.buildKey(key)
 	return s.client.Del(s.ctx, redisKey).Err()
 }
@@ -141,18 +141,18 @@ func (s *Store) Delete(key string) error {
 func (s *Store) Keys() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	pattern := s.buildKey("*")
 	result := s.client.Keys(s.ctx, pattern)
 	if result.Err() != nil {
 		return []string{}
 	}
-	
+
 	redisKeys, err := result.Result()
 	if err != nil {
 		return []string{}
 	}
-	
+
 	// Convert Redis keys back to cache keys and filter expired entries
 	cacheKeys := make([]string, 0, len(redisKeys))
 	for _, redisKey := range redisKeys {
@@ -160,13 +160,13 @@ func (s *Store) Keys() []string {
 		if cacheKey == "" {
 			continue
 		}
-		
+
 		// Check if the entry is valid (not expired)
 		if _, found := s.Get(cacheKey); found {
 			cacheKeys = append(cacheKeys, cacheKey)
 		}
 	}
-	
+
 	return cacheKeys
 }
 
@@ -179,22 +179,22 @@ func (s *Store) Len() int {
 func (s *Store) Clear() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	pattern := s.buildKey("*")
 	result := s.client.Keys(s.ctx, pattern)
 	if result.Err() != nil {
 		return result.Err()
 	}
-	
+
 	keys, err := result.Result()
 	if err != nil {
 		return err
 	}
-	
+
 	if len(keys) > 0 {
 		return s.client.Del(s.ctx, keys...).Err()
 	}
-	
+
 	return nil
 }
 
@@ -246,17 +246,17 @@ func (s *Store) serializeEntry(e *entry.Entry) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal entry value: %w", err)
 	}
-	
+
 	serialized := SerializedEntry{
 		Value:      valueBytes,
 		CreatedAt:  e.CreatedAt,
 		LastAccess: e.AccessedAt,
 	}
-	
+
 	if e.HasExpiry() {
 		serialized.ExpiresAt = e.ExpiresAt
 	}
-	
+
 	return json.Marshal(serialized)
 }
 
@@ -266,12 +266,12 @@ func (s *Store) deserializeEntry(data []byte) (*entry.Entry, error) {
 	if err := json.Unmarshal(data, &serialized); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal serialized entry: %w", err)
 	}
-	
+
 	var value any
 	if err := json.Unmarshal(serialized.Value, &value); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal entry value: %w", err)
 	}
-	
+
 	// Create a new entry with current time, then manually set the fields
 	var e *entry.Entry
 	if serialized.ExpiresAt != nil {
@@ -280,7 +280,7 @@ func (s *Store) deserializeEntry(data []byte) (*entry.Entry, error) {
 	} else {
 		e = entry.NewWithoutTTL(value)
 	}
-	
+
 	// Manually restore the timestamps by direct field access
 	// Note: This requires the Entry fields to be exported
 	e.CreatedAt = serialized.CreatedAt
@@ -288,7 +288,7 @@ func (s *Store) deserializeEntry(data []byte) (*entry.Entry, error) {
 	if serialized.ExpiresAt != nil {
 		e.ExpiresAt = serialized.ExpiresAt
 	}
-	
+
 	return e, nil
 }
 
@@ -298,7 +298,7 @@ func (s *Store) saveEntryToRedis(redisKey string, e *entry.Entry) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Calculate TTL for Redis
 	var redisTTL time.Duration
 	if e.HasExpiry() {
@@ -312,7 +312,7 @@ func (s *Store) saveEntryToRedis(redisKey string, e *entry.Entry) error {
 		// Use default TTL if no expiry set
 		redisTTL = s.defaultTTL
 	}
-	
+
 	if redisTTL > 0 {
 		return s.client.SetEx(s.ctx, redisKey, string(data), redisTTL).Err()
 	} else {
