@@ -16,7 +16,7 @@ We take security vulnerabilities seriously. If you discover a security vulnerabi
 ### How to Report
 
 1. **DO NOT** create a public GitHub issue for security vulnerabilities
-2. Email security reports to: **vnykmshr@gmail.com**
+2. Report security issues via [GitHub Security Advisories](https://github.com/vnykmshr/obcache-go/security/advisories)
 3. Include as much information as possible:
    - Description of the vulnerability
    - Steps to reproduce the issue
@@ -56,7 +56,7 @@ This project uses several security tools:
 ## Contact
 
 For security-related questions or concerns:
-- Email: vnykmshr@gmail.com
 - GitHub: @vnykmshr
+- Security Issues: [GitHub Security Advisories](https://github.com/vnykmshr/obcache-go/security/advisories)
 
 For general questions about obcache-go, please use GitHub Issues or Discussions.
