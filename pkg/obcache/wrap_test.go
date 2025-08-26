@@ -493,3 +493,213 @@ func TestWrapContextAwareFunctions(t *testing.T) {
 		t.Fatalf("Expected result 12, got %d", result3)
 	}
 }
+
+//nolint:gocyclo // Test function complexity is acceptable
+func TestErrorCaching(t *testing.T) {
+	cache, err := New(NewDefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create cache: %v", err)
+	}
+	defer cache.Close()
+
+	callCount := 0
+	testFunc := func(shouldError bool) (int, error) {
+		callCount++
+		if shouldError {
+			return 0, fmt.Errorf("test error %d", callCount)
+		}
+		return 42, nil
+	}
+
+	t.Run("WithoutErrorCaching", func(t *testing.T) {
+		callCount = 0
+		// Use a fresh cache to avoid interference
+		freshCache, err := New(NewDefaultConfig())
+		if err != nil {
+			t.Fatalf("Failed to create fresh cache: %v", err)
+		}
+		defer freshCache.Close()
+
+		wrapped := Wrap(freshCache, testFunc) // Default: don't cache errors
+
+		// First call with error - should not be cached
+		_, err1 := wrapped(true)
+		if err1 == nil {
+			t.Fatal("Expected error from first call")
+		}
+		if callCount != 1 {
+			t.Fatalf("Expected 1 call, got %d", callCount)
+		}
+
+		// Second call with same args - should call function again (error not cached)
+		_, err2 := wrapped(true)
+		if err2 == nil {
+			t.Fatal("Expected error from second call")
+		}
+		if callCount != 2 {
+			t.Fatalf("Expected 2 calls, got %d", callCount)
+		}
+
+		// Success call - should be cached
+		result, err3 := wrapped(false)
+		if err3 != nil {
+			t.Fatalf("Unexpected error: %v", err3)
+		}
+		if result != 42 {
+			t.Fatalf("Expected 42, got %d", result)
+		}
+		if callCount != 3 {
+			t.Fatalf("Expected 3 calls, got %d", callCount)
+		}
+
+		// Second success call - should use cache
+		result2, err4 := wrapped(false)
+		if err4 != nil {
+			t.Fatalf("Unexpected error: %v", err4)
+		}
+		if result2 != 42 {
+			t.Fatalf("Expected 42, got %d", result2)
+		}
+		if callCount != 3 { // Should not increment
+			t.Fatalf("Expected 3 calls (cached), got %d", callCount)
+		}
+	})
+
+	t.Run("WithErrorCaching", func(t *testing.T) {
+		callCount = 0
+		// Use a fresh cache to avoid interference
+		freshCache, err := New(NewDefaultConfig())
+		if err != nil {
+			t.Fatalf("Failed to create fresh cache: %v", err)
+		}
+		defer freshCache.Close()
+
+		wrapped := Wrap(freshCache, testFunc, WithErrorCaching())
+
+		// First call with error - should be cached
+		_, err1 := wrapped(true)
+		if err1 == nil {
+			t.Fatal("Expected error from first call")
+		}
+		expectedError := "test error 1"
+		if err1.Error() != expectedError {
+			t.Fatalf("Expected '%s', got '%s'", expectedError, err1.Error())
+		}
+		if callCount != 1 {
+			t.Fatalf("Expected 1 call, got %d", callCount)
+		}
+
+		// Second call with same args - should return cached error
+		_, err2 := wrapped(true)
+		if err2 == nil {
+			t.Fatal("Expected error from second call")
+		}
+		if err2.Error() != expectedError {
+			t.Fatalf("Expected cached error '%s', got '%s'", expectedError, err2.Error())
+		}
+		if callCount != 1 { // Should not increment (error was cached)
+			t.Fatalf("Expected 1 call (cached error), got %d", callCount)
+		}
+	})
+
+	t.Run("WithErrorTTL", func(t *testing.T) {
+		callCount = 0
+		// Use a fresh cache to avoid interference from previous test runs
+		freshCache, err := New(NewDefaultConfig())
+		if err != nil {
+			t.Fatalf("Failed to create fresh cache: %v", err)
+		}
+		defer freshCache.Close()
+
+		wrapped := Wrap(freshCache, testFunc, WithErrorTTL(50*time.Millisecond))
+
+		// First error call
+		_, err1 := wrapped(true)
+		if err1 == nil {
+			t.Fatal("Expected error from first call")
+		}
+		if callCount != 1 {
+			t.Fatalf("Expected 1 call, got %d", callCount)
+		}
+
+		// Second call before TTL expires - should use cached error
+		_, err2 := wrapped(true)
+		if err2 == nil {
+			t.Fatal("Expected cached error")
+		}
+		if callCount != 1 {
+			t.Fatalf("Expected 1 call (cached), got %d", callCount)
+		}
+
+		// Wait for error to expire
+		time.Sleep(60 * time.Millisecond)
+
+		// Third call after TTL expires - should call function again
+		_, err3 := wrapped(true)
+		if err3 == nil {
+			t.Fatal("Expected error after cache expiry")
+		}
+		if callCount != 2 {
+			t.Fatalf("Expected 2 calls after expiry, got %d", callCount)
+		}
+	})
+}
+
+//nolint:gocyclo // Test function complexity is acceptable
+func TestErrorCachingMultipleReturnValues(t *testing.T) {
+	cache, err := New(NewDefaultConfig())
+	if err != nil {
+		t.Fatalf("Failed to create cache: %v", err)
+	}
+	defer cache.Close()
+
+	callCount := 0
+	testFunc := func(shouldError bool) (string, int, error) {
+		callCount++
+		if shouldError {
+			return "", 0, fmt.Errorf("multi-value error %d", callCount)
+		}
+		return "hello", 123, nil
+	}
+
+	wrapped := Wrap(cache, testFunc, WithErrorCaching())
+
+	// First error call
+	s1, i1, err1 := wrapped(true)
+	if err1 == nil {
+		t.Fatal("Expected error")
+	}
+	if s1 != "" || i1 != 0 {
+		t.Fatalf("Expected zero values, got %s, %d", s1, i1)
+	}
+	if callCount != 1 {
+		t.Fatalf("Expected 1 call, got %d", callCount)
+	}
+
+	// Second error call - should use cached error
+	s2, i2, err2 := wrapped(true)
+	if err2 == nil {
+		t.Fatal("Expected cached error")
+	}
+	if s2 != "" || i2 != 0 {
+		t.Fatalf("Expected zero values, got %s, %d", s2, i2)
+	}
+	if err2.Error() != err1.Error() {
+		t.Fatalf("Expected same error message, got '%s' vs '%s'", err1.Error(), err2.Error())
+	}
+	if callCount != 1 { // Should not increment
+		t.Fatalf("Expected 1 call (cached), got %d", callCount)
+	}
+
+	// Success call
+	s3, i3, err3 := wrapped(false)
+	if err3 != nil {
+		t.Fatalf("Unexpected error: %v", err3)
+	}
+	if s3 != "hello" || i3 != 123 {
+		t.Fatalf("Expected 'hello', 123, got %s, %d", s3, i3)
+	}
+	if callCount != 2 {
+		t.Fatalf("Expected 2 calls, got %d", callCount)
+	}
+}

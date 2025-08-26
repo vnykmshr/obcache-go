@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+// cachedError represents an error that has been cached
+type cachedError struct {
+	Err error
+}
+
 // WrapOptions holds configuration options for function wrapping
 type WrapOptions struct {
 	// TTL overrides the default TTL for this wrapped function
@@ -17,6 +22,13 @@ type WrapOptions struct {
 
 	// DisableCache disables caching for this function (useful for testing)
 	DisableCache bool
+
+	// CacheErrors controls whether errors should be cached
+	// When true, errors will be cached with the specified ErrorTTL
+	CacheErrors bool
+
+	// ErrorTTL is the TTL for cached errors (defaults to TTL if not set)
+	ErrorTTL time.Duration
 }
 
 // WrapOption is a function that configures WrapOptions
@@ -40,6 +52,21 @@ func WithKeyFunc(keyFunc KeyGenFunc) WrapOption {
 func WithoutCache() WrapOption {
 	return func(opts *WrapOptions) {
 		opts.DisableCache = true
+	}
+}
+
+// WithErrorCaching enables caching of errors with the same TTL as successful results
+func WithErrorCaching() WrapOption {
+	return func(opts *WrapOptions) {
+		opts.CacheErrors = true
+	}
+}
+
+// WithErrorTTL enables error caching with a specific TTL
+func WithErrorTTL(ttl time.Duration) WrapOption {
+	return func(opts *WrapOptions) {
+		opts.CacheErrors = true
+		opts.ErrorTTL = ttl
 	}
 }
 
@@ -142,6 +169,14 @@ func executeFunctionWithSingleflight(cache *Cache, fnValue reflect.Value, fnType
 	value, err, shared := cache.sf.Do(key, compute)
 
 	if err != nil {
+		// Cache errors if enabled
+		if opts.CacheErrors && !shared {
+			errorTTL := opts.ErrorTTL
+			if errorTTL == 0 {
+				errorTTL = opts.TTL
+			}
+			cache.Set(key, cachedError{Err: err}, errorTTL, WithContext(ctx), WithArgs(keyArgs))
+		}
 		// Return the error in the function's expected format
 		return createErrorReturn(fnType, err)
 	}
@@ -168,7 +203,7 @@ func processResultsWithError(results []reflect.Value) (any, error) {
 	// Handle (T, error) return pattern
 	errResult := results[len(results)-1]
 	if !errResult.IsNil() {
-		// Don't cache errors, return them directly
+		// Return error for conditional caching (handled in caller)
 		return nil, errResult.Interface().(error)
 	}
 
@@ -200,6 +235,11 @@ func processResultsWithoutError(results []reflect.Value) (any, error) {
 
 // convertCachedValue converts a cached value back to the expected return format
 func convertCachedValue(cachedValue any, fnType reflect.Type, hasErrorReturn bool) []reflect.Value {
+	// Check if this is a cached error
+	if ce, ok := cachedValue.(cachedError); ok {
+		return createErrorReturn(fnType, ce.Err)
+	}
+
 	numOut := fnType.NumOut()
 	results := make([]reflect.Value, numOut)
 

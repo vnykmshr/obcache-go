@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"github.com/vnykmshr/obcache-go/internal/entry"
 	"github.com/vnykmshr/obcache-go/internal/store"
 )
@@ -114,7 +115,7 @@ func (s *Store) Get(key string) (*entry.Entry, bool) {
 
 	// Update last access time and save back to Redis
 	entry.Touch()
-	s.saveEntryToRedis(redisKey, entry)
+	_ = s.saveEntryToRedis(redisKey, entry)
 
 	return entry, true
 }
@@ -315,9 +316,8 @@ func (s *Store) saveEntryToRedis(redisKey string, e *entry.Entry) error {
 
 	if redisTTL > 0 {
 		return s.client.SetEx(s.ctx, redisKey, string(data), redisTTL).Err()
-	} else {
-		return s.client.Set(s.ctx, redisKey, string(data), 0).Err()
 	}
+	return s.client.Set(s.ctx, redisKey, string(data), 0).Err()
 }
 
 // Ensure Store implements the required interfaces

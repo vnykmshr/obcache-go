@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"github.com/vnykmshr/obcache-go/internal/entry"
 )
 
@@ -80,11 +81,8 @@ func TestRedisStoreBasicOperations(t *testing.T) {
 		t.Fatal("Expected entry to be deleted")
 	}
 
-	// Test Len after delete
-	if store.Len() > 0 {
-		// Note: Len() might return 0 or more depending on other concurrent tests
-		// This is just a basic sanity check
-	}
+	// Test Len after delete - basic sanity check
+	_ = store.Len()
 }
 
 func TestRedisStoreWithTTL(t *testing.T) {

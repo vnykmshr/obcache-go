@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
 	"github.com/vnykmshr/obcache-go/internal/entry"
+	"github.com/vnykmshr/obcache-go/internal/eviction"
 	"github.com/vnykmshr/obcache-go/internal/singleflight"
 	"github.com/vnykmshr/obcache-go/internal/store"
 	"github.com/vnykmshr/obcache-go/internal/store/memory"
@@ -138,7 +140,13 @@ func New(config *Config) (*Cache, error) {
 		lruStore.SetEvictCallback(func(key string, value any) {
 			cache.stats.incEvictions()
 			if cache.hooks != nil {
-				cache.hooks.invokeOnEvict(key, value, EvictReasonLRU)
+				// Use EvictReasonCapacity for strategy-based evictions
+				// Check if this is the new strategy store
+				if _, isStrategyStore := cacheStore.(*memory.StrategyStore); isStrategyStore {
+					cache.hooks.invokeOnEvict(key, value, EvictReasonCapacity)
+				} else {
+					cache.hooks.invokeOnEvict(key, value, EvictReasonLRU)
+				}
 			}
 		})
 	}
@@ -157,6 +165,21 @@ func New(config *Config) (*Cache, error) {
 
 // createMemoryStore creates a memory-based store
 func createMemoryStore(config *Config) (store.Store, error) {
+	// Use pluggable eviction strategy if EvictionType is set to non-LRU
+	// For backward compatibility, fall back to the original implementation for LRU
+	if config.EvictionType != "" && config.EvictionType != eviction.LRU {
+		evictionConfig := eviction.Config{
+			Type:     config.EvictionType,
+			Capacity: config.MaxEntries,
+		}
+
+		if config.CleanupInterval > 0 {
+			return memory.NewWithStrategyAndCleanup(evictionConfig, config.CleanupInterval)
+		}
+		return memory.NewWithStrategy(evictionConfig)
+	}
+
+	// Default to original LRU implementation for compatibility
 	if config.CleanupInterval > 0 {
 		return memory.NewWithCleanup(config.MaxEntries, config.CleanupInterval)
 	}
@@ -483,10 +506,9 @@ func (c *Cache) decompressValue(entry *entry.Entry) (any, error) {
 		}
 
 		return result, nil
-	} else {
-		// No compression was configured, return value directly
-		return entry.Value, nil
 	}
+	// No compression was configured, return value directly
+	return entry.Value, nil
 }
 
 // approximateSize estimates the memory size of a value

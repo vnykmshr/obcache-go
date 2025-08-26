@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/vnykmshr/obcache-go/internal/eviction"
 	"github.com/vnykmshr/obcache-go/pkg/compression"
 	"github.com/vnykmshr/obcache-go/pkg/metrics"
 )
@@ -80,6 +82,11 @@ type Config struct {
 	// Default: 1 minute
 	CleanupInterval time.Duration
 
+	// EvictionType sets the eviction strategy for memory store
+	// Only applies to memory store
+	// Default: LRU
+	EvictionType eviction.EvictionType
+
 	// KeyGenFunc defines a custom key generation function
 	// If nil, DefaultKeyFunc will be used
 	KeyGenFunc KeyGenFunc
@@ -110,6 +117,7 @@ func NewDefaultConfig() *Config {
 		MaxEntries:      1000,
 		DefaultTTL:      5 * time.Minute,
 		CleanupInterval: time.Minute,
+		EvictionType:    eviction.LRU,
 		KeyGenFunc:      nil, // will use DefaultKeyFunc
 		Hooks:           &Hooks{},
 		Redis:           nil,
@@ -318,4 +326,25 @@ func (c *Config) WithCompressionLevel(level int) *Config {
 	}
 	c.Compression.Level = level
 	return c
+}
+
+// WithEvictionType sets the eviction strategy for memory store
+func (c *Config) WithEvictionType(evictionType eviction.EvictionType) *Config {
+	c.EvictionType = evictionType
+	return c
+}
+
+// WithLRUEviction configures the cache to use LRU eviction strategy
+func (c *Config) WithLRUEviction() *Config {
+	return c.WithEvictionType(eviction.LRU)
+}
+
+// WithLFUEviction configures the cache to use LFU eviction strategy
+func (c *Config) WithLFUEviction() *Config {
+	return c.WithEvictionType(eviction.LFU)
+}
+
+// WithFIFOEviction configures the cache to use FIFO eviction strategy
+func (c *Config) WithFIFOEviction() *Config {
+	return c.WithEvictionType(eviction.FIFO)
 }
