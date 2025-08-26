@@ -455,7 +455,7 @@ func TestHookConditionBuilders(t *testing.T) {
 	// Test AndCondition
 	andCondition := AndCondition(
 		KeyPrefixCondition("api:"),
-		ContextValueCondition("env", "prod"),
+		ContextValueCondition(envKey("env"), "prod"),
 	)
 	if !andCondition(ctx, "api:users", nil) {
 		t.Fatal("AndCondition should match when both conditions are true")
