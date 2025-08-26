@@ -21,7 +21,7 @@ func TestDebugHandler(t *testing.T) {
 	_ = cache.Warmup("key3", "warmed-value")
 
 	// Trigger some stats
-	_, _ = cache.Get("key1") // hit
+	_, _ = cache.Get("key1")    // hit
 	_, _ = cache.Get("missing") // miss
 
 	handler := cache.DebugHandler()
@@ -266,8 +266,8 @@ func TestNewDebugServer(t *testing.T) {
 	_ = cache.Set("test", "value", time.Hour)
 
 	testCases := []struct {
-		path     string
-		hasKeys  bool
+		path    string
+		hasKeys bool
 	}{
 		{"/", true},
 		{"/keys", true},
@@ -304,10 +304,10 @@ func TestFormatDuration(t *testing.T) {
 		expected string
 	}{
 		{500 * time.Nanosecond, "500ns"},
-		{1500 * time.Microsecond, "1ms"},         // Truncated to millisecond
-		{1500 * time.Millisecond, "1s"},         // Truncated to second
-		{90 * time.Second, "1m0s"},              // Truncated to minute
-		{3661 * time.Second, "1h0m0s"},          // Truncated to hour
+		{1500 * time.Microsecond, "1ms"}, // Truncated to millisecond
+		{1500 * time.Millisecond, "1s"},  // Truncated to second
+		{90 * time.Second, "1m0s"},       // Truncated to minute
+		{3661 * time.Second, "1h0m0s"},   // Truncated to hour
 	}
 
 	for _, tc := range testCases {

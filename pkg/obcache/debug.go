@@ -14,14 +14,14 @@ type DebugResponse struct {
 
 // DebugStats represents cache statistics in the debug response
 type DebugStats struct {
-	Hits          int64   `json:"hits"`
-	Misses        int64   `json:"misses"`
-	Evictions     int64   `json:"evictions"`
-	Invalidations int64   `json:"invalidations"`
-	KeyCount      int64   `json:"keyCount"`
-	InFlight      int64   `json:"inFlight"`
-	HitRate       float64 `json:"hitRate"`
-	Total         int64   `json:"total"`
+	Hits          int64        `json:"hits"`
+	Misses        int64        `json:"misses"`
+	Evictions     int64        `json:"evictions"`
+	Invalidations int64        `json:"invalidations"`
+	KeyCount      int64        `json:"keyCount"`
+	InFlight      int64        `json:"inFlight"`
+	HitRate       float64      `json:"hitRate"`
+	Total         int64        `json:"total"`
 	Config        *DebugConfig `json:"config"`
 }
 
@@ -122,7 +122,7 @@ func (c *Cache) DebugHandler() http.Handler {
 func (c *Cache) NewDebugServer(addr string) *http.Server {
 	mux := http.NewServeMux()
 	handler := c.DebugHandler()
-	
+
 	mux.Handle("/stats", handler)
 	mux.Handle("/keys", handler)
 	mux.Handle("/", handler)

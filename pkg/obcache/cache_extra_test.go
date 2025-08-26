@@ -35,7 +35,7 @@ func TestCacheKeys(t *testing.T) {
 		}
 		delete(expectedKeys, key)
 	}
-	
+
 	if len(expectedKeys) != 0 {
 		t.Fatal("Some expected keys were not returned")
 	}
@@ -83,18 +83,18 @@ func TestCacheHas(t *testing.T) {
 
 	// Add an entry
 	_ = cache.Set("key1", "value1", time.Hour)
-	
+
 	if !cache.Has("key1") {
 		t.Fatal("Cache should have key1")
 	}
-	
+
 	if cache.Has("key2") {
 		t.Fatal("Cache should not have key2")
 	}
 
 	// Test with expired entry - add and wait
 	_ = cache.Set("expired", "value", time.Nanosecond) // Very short TTL
-	time.Sleep(2 * time.Millisecond) // Wait for expiration
+	time.Sleep(2 * time.Millisecond)                   // Wait for expiration
 	if cache.Has("expired") {
 		t.Fatal("Cache should not have expired key")
 	}
@@ -135,7 +135,7 @@ func TestCacheGetWithTTL(t *testing.T) {
 
 	// Add an entry with default TTL via Warmup
 	cache.Warmup("default-ttl", "value-default-ttl")
-	
+
 	value, ttl, found = cache.GetWithTTL("default-ttl")
 	if !found {
 		t.Fatal("Should find key with default TTL")
@@ -205,7 +205,7 @@ func TestCacheCleanup(t *testing.T) {
 	// Add entries with very short and long TTLs
 	_ = cache.Set("expired", "value", time.Nanosecond) // Very short TTL
 	_ = cache.Set("valid", "value", time.Hour)
-	
+
 	// Wait for the short TTL entry to expire
 	time.Sleep(2 * time.Millisecond)
 
@@ -233,7 +233,7 @@ func TestCacheCleanup(t *testing.T) {
 
 func TestCacheInvalidateAllWithHooks(t *testing.T) {
 	invalidateCount := 0
-	
+
 	hooks := &Hooks{
 		OnInvalidate: []OnInvalidateHook{
 			func(_ string) {
@@ -241,7 +241,7 @@ func TestCacheInvalidateAllWithHooks(t *testing.T) {
 			},
 		},
 	}
-	
+
 	config := NewDefaultConfig().WithHooks(hooks)
 	cache, err := New(config)
 	if err != nil {
