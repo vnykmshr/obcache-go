@@ -19,7 +19,7 @@ func BenchmarkSingleflightBasic(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		g.Do("key", fn)
+		_, _, _ = g.Do("key", fn)
 	}
 }
 
@@ -39,7 +39,7 @@ func BenchmarkSingleflightConcurrent(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			g.Do("same-key", fn)
+			_, _, _ = g.Do("same-key", fn)
 		}
 	})
 
@@ -61,7 +61,7 @@ func BenchmarkSingleflightDifferentKeys(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		g.Do(string(rune(i%100)), fn)
+		_, _, _ = g.Do(string(rune(i%100)), fn)
 	}
 }
 
@@ -77,7 +77,7 @@ func BenchmarkSingleflightWithContext(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		g.DoContext(context.Background(), "key", fn)
+		_, _, _ = g.DoContext(context.Background(), "key", fn)
 	}
 }
 
@@ -112,7 +112,7 @@ func BenchmarkSingleflightMemoryUsage(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// Mix of same and different keys to test memory allocation
 		key := string(rune(i % 10))
-		g.Do(key, fn)
+		_, _, _ = g.Do(key, fn)
 		if i%10 == 9 {
 			// Forget some keys to test cleanup
 			g.Forget(string(rune(i % 10)))

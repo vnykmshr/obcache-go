@@ -13,22 +13,22 @@ func TestHookExecution(t *testing.T) {
 
 	config := NewDefaultConfig().WithMaxEntries(2).WithHooks(&Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {
+			func(_ string, _ any) {
 				atomic.AddInt32(&hitCount, 1)
 			},
 		},
 		OnMiss: []OnMissHook{
-			func(key string) {
+			func(_ string) {
 				atomic.AddInt32(&missCount, 1)
 			},
 		},
 		OnEvict: []OnEvictHook{
-			func(key string, value any, reason EvictReason) {
+			func(_ string, _ any, _ EvictReason) {
 				atomic.AddInt32(&evictCount, 1)
 			},
 		},
 		OnInvalidate: []OnInvalidateHook{
-			func(key string) {
+			func(_ string) {
 				atomic.AddInt32(&invalidateCount, 1)
 			},
 		},
@@ -91,7 +91,7 @@ func TestHookParameters(t *testing.T) {
 			},
 		},
 		OnEvict: []OnEvictHook{
-			func(key string, value any, reason EvictReason) {
+			func(key string, value any, _ EvictReason) {
 				mu.Lock()
 				capturedKeys = append(capturedKeys, key)
 				capturedValues = append(capturedValues, value)
@@ -148,12 +148,12 @@ func TestHookConcurrency(t *testing.T) {
 
 	config := NewDefaultConfig().WithHooks(&Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {
+			func(_ string, _ any) {
 				atomic.AddInt32(&hookCallCount, 1)
 			},
 		},
 		OnMiss: []OnMissHook{
-			func(key string) {
+			func(_ string) {
 				atomic.AddInt32(&hookCallCount, 1)
 			},
 		},
@@ -205,10 +205,10 @@ func TestMultipleHooksOfSameType(t *testing.T) {
 	// Test multiple OnHit hooks
 	hooks := &Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {
+			func(_ string, _ any) {
 				atomic.AddInt32(&hook1Calls, 1)
 			},
-			func(key string, value any) {
+			func(_ string, _ any) {
 				atomic.AddInt32(&hook2Calls, 1)
 			},
 		},
@@ -236,12 +236,12 @@ func TestHookIntegrationWithWrap(t *testing.T) {
 
 	config := NewDefaultConfig().WithHooks(&Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {
+			func(_ string, _ any) {
 				atomic.AddInt32(&hitCalls, 1)
 			},
 		},
 		OnMiss: []OnMissHook{
-			func(key string) {
+			func(_ string) {
 				atomic.AddInt32(&missCalls, 1)
 			},
 		},
@@ -315,7 +315,7 @@ func TestHookErrorHandling(t *testing.T) {
 	// Test that panicking hooks don't break the cache
 	config := NewDefaultConfig().WithHooks(&Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {
+			func(_ string, _ any) {
 				panic("hook panic")
 			},
 		},

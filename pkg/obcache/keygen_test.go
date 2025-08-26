@@ -239,7 +239,7 @@ func TestKeyFuncSpecialCharacters(t *testing.T) {
 
 func TestKeyFuncIntegrationWithCache(t *testing.T) {
 	// Test that custom key functions work with the cache
-	customKeyFunc := func(args []any) string {
+	customKeyFunc := func(_ []any) string {
 		// Always return the same key regardless of args
 		return "constant-key"
 	}

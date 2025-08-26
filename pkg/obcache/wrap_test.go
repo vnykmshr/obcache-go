@@ -295,7 +295,8 @@ func TestWrapMultipleReturnValues(t *testing.T) {
 	if val1 != 10 {
 		t.Fatalf("Expected 10, got %d", val1)
 	}
-	if str1 != "result-10" {
+	const expectedResult = "result-10"
+	if str1 != expectedResult {
 		t.Fatalf("Expected 'result-10', got %s", str1)
 	}
 	if atomic.LoadInt32(&callCount) != 1 {
@@ -340,7 +341,7 @@ func TestValidateWrappableFunction(t *testing.T) {
 		func() int { return 42 },
 		func(x int) int { return x * 2 },
 		func(x, y int) (int, error) { return x + y, nil },
-		func() (string, error) { return "test", nil },
+		func() (string, error) { const testValue = "test"; return testValue, nil },
 	}
 
 	for i, fn := range validFuncs {
@@ -356,7 +357,7 @@ func TestValidateWrappableFunction(t *testing.T) {
 	}{
 		{"not a function", "non-function"},
 		{func() {}, "no return values"},
-		{func(x int, y ...string) int { return x }, "variadic function"},
+		{func(x int, _ ...string) int { return x }, "variadic function"},
 		{func() (int, string) { return 1, "test" }, "multiple returns without error"},
 	}
 

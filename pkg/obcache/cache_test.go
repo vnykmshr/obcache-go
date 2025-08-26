@@ -15,8 +15,10 @@ func TestCacheBasicOperations(t *testing.T) {
 	}
 
 	// Test Set and Get
-	key := "test-key"
-	value := "test-value"
+	const testKey = "test-key"
+	key := testKey
+	const testValue = "test-value"
+	value := testValue
 
 	err = cache.Set(key, value, time.Hour)
 	if err != nil {
@@ -64,7 +66,8 @@ func TestCacheInvalidate(t *testing.T) {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
 
-	key := "test-key"
+	const testKey = "test-key"
+	key := testKey
 	cache.Set(key, "value", time.Hour)
 
 	// Verify it exists
@@ -97,8 +100,10 @@ func TestCacheWarmup(t *testing.T) {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
 
-	key := "test-key"
-	value := "warmed-value"
+	const testKey = "test-key"
+	key := testKey
+	const warmedValue = "warmed-value"
+	value := warmedValue
 
 	// Warmup
 	err = cache.Warmup(key, value)
@@ -122,8 +127,10 @@ func TestCacheWarmupWithTTL(t *testing.T) {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
 
-	key := "test-key"
-	value := "warmed-value"
+	const testKey = "test-key"
+	key := testKey
+	const warmedValue = "warmed-value"
+	value := warmedValue
 	customTTL := 30 * time.Minute
 
 	// Warmup with custom TTL
@@ -148,7 +155,8 @@ func TestCacheTTL(t *testing.T) {
 		t.Fatalf("Failed to create cache: %v", err)
 	}
 
-	key := "test-key"
+	const testKey = "test-key"
+	key := testKey
 	shortTTL := 10 * time.Millisecond
 
 	cache.Set(key, "value", shortTTL)
@@ -178,11 +186,11 @@ func TestCacheEviction(t *testing.T) {
 	}
 
 	// Add entries to fill cache
-	cache.Set("key1", "value1", time.Hour)
-	cache.Set("key2", "value2", time.Hour)
+	_ = cache.Set("key1", "value1", time.Hour)
+	_ = cache.Set("key2", "value2", time.Hour)
 
 	// Add third entry to trigger eviction
-	cache.Set("key3", "value3", time.Hour)
+	_ = cache.Set("key3", "value3", time.Hour)
 
 	// key1 should be evicted (LRU)
 	_, found := cache.Get("key1")
@@ -259,8 +267,8 @@ func TestCacheReset(t *testing.T) {
 	}
 
 	// Add some data and operations
-	cache.Set("key1", "value1", time.Hour)
-	cache.Set("key2", "value2", time.Hour)
+	_ = cache.Set("key1", "value1", time.Hour)
+	_ = cache.Set("key2", "value2", time.Hour)
 	cache.Get("key1")
 	cache.Get("nonexistent")
 	cache.Invalidate("key2")

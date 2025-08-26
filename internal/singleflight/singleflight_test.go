@@ -256,7 +256,7 @@ func TestSingleflightInFlight(t *testing.T) {
 	// Start a slow operation
 	done := make(chan bool)
 	go func() {
-		g.Do("inflight-key", fn)
+		_, _, _ = g.Do("inflight-key", fn)
 		done <- true
 	}()
 
@@ -282,7 +282,8 @@ func TestSingleflightConcurrentDifferentTypes(t *testing.T) {
 
 	// Test int keys, string values
 	v1, err1, _ := gInt.Do(123, func() (string, error) {
-		return "test", nil
+		const testValue = "test"
+		return testValue, nil
 	})
 	if err1 != nil || v1 != "test" {
 		t.Fatalf("Int key group failed: %v, %s", err1, v1)

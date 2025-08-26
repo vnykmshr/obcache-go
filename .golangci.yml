@@ -51,6 +51,13 @@ issues:
       linters:
         - gosec
         - gocritic
+        - errcheck  # Test files often don't need to check all errors
+        - goconst   # Test files often have repeated strings
+        - unparam   # Test functions often have unused params
+    - path: bench_test\.go
+      linters:
+        - errcheck  # Benchmark files focus on performance, not error handling
+        - unparam   # Benchmark functions often have unused params
     - path: examples/
       linters:
         - gosec

@@ -53,8 +53,9 @@ func TestWithCleanupInterval(t *testing.T) {
 }
 
 func TestWithKeyGenFunc(t *testing.T) {
-	customKeyFunc := func(args []any) string {
-		return "custom-key"
+	customKeyFunc := func(_ []any) string {
+		const customKey = "custom-key"
+		return customKey
 	}
 	config := NewDefaultConfig().WithKeyGenFunc(customKeyFunc)
 
@@ -72,7 +73,7 @@ func TestWithKeyGenFunc(t *testing.T) {
 func TestWithHooks(t *testing.T) {
 	hooks := &Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {},
+			func(_ string, _ any) {},
 		},
 	}
 	config := NewDefaultConfig().WithHooks(hooks)
@@ -84,13 +85,13 @@ func TestWithHooks(t *testing.T) {
 
 func TestConfigBuilder(t *testing.T) {
 	// Test building config with multiple options
-	customKeyFunc := func(args []any) string {
+	customKeyFunc := func(_ []any) string {
 		return "test-key"
 	}
 
 	hooks := &Hooks{
 		OnHit: []OnHitHook{
-			func(key string, value any) {},
+			func(_ string, _ any) {},
 		},
 	}
 
@@ -156,7 +157,7 @@ func TestNewCacheWithConfig(t *testing.T) {
 
 func TestConfigCopy(t *testing.T) {
 	// Test that config modifications don't affect existing caches
-	originalKeyFunc := func(args []any) string {
+	originalKeyFunc := func(_ []any) string {
 		return "original"
 	}
 
@@ -167,7 +168,7 @@ func TestConfigCopy(t *testing.T) {
 	}
 
 	// Create another cache with different config
-	newKeyFunc := func(args []any) string {
+	newKeyFunc := func(_ []any) string {
 		return "new"
 	}
 
