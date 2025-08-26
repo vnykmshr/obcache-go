@@ -1,6 +1,7 @@
 package entry
 
 import (
+	"sync"
 	"time"
 )
 
@@ -16,7 +17,9 @@ type Entry struct {
 	CreatedAt time.Time
 
 	// AccessedAt is when this entry was last accessed (for LRU)
+	// Protected by mu for concurrent access
 	AccessedAt time.Time
+	mu         sync.RWMutex
 }
 
 // New creates a new cache entry with the given value and TTL
@@ -77,12 +80,17 @@ func (e *Entry) Age() time.Duration {
 
 // TimeSinceLastAccess returns how long ago this entry was last accessed
 func (e *Entry) TimeSinceLastAccess() time.Duration {
-	return time.Since(e.AccessedAt)
+	e.mu.RLock()
+	accessedAt := e.AccessedAt
+	e.mu.RUnlock()
+	return time.Since(accessedAt)
 }
 
 // Touch updates the last accessed time to now
 func (e *Entry) Touch() {
+	e.mu.Lock()
 	e.AccessedAt = time.Now()
+	e.mu.Unlock()
 }
 
 // UpdateExpiry updates the expiration time with a new TTL from now
