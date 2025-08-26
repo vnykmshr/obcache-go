@@ -2,13 +2,16 @@ package obcache
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/vnykmshr/obcache-go/internal/entry"
 	"github.com/vnykmshr/obcache-go/internal/singleflight"
 	"github.com/vnykmshr/obcache-go/internal/store"
 	"github.com/vnykmshr/obcache-go/internal/store/memory"
+	redisstore "github.com/vnykmshr/obcache-go/internal/store/redis"
 )
 
 // Context keys for cache-specific metadata
@@ -83,14 +86,17 @@ func New(config *Config) (*Cache, error) {
 		config = NewDefaultConfig()
 	}
 
-	// Create memory store with cleanup if cleanup interval is set
-	var memStore store.Store
+	// Create the appropriate store based on configuration
+	var cacheStore store.Store
 	var err error
 
-	if config.CleanupInterval > 0 {
-		memStore, err = memory.NewWithCleanup(config.MaxEntries, config.CleanupInterval)
-	} else {
-		memStore, err = memory.New(config.MaxEntries)
+	switch config.StoreType {
+	case StoreTypeMemory:
+		cacheStore, err = createMemoryStore(config)
+	case StoreTypeRedis:
+		cacheStore, err = createRedisStore(config)
+	default:
+		return nil, fmt.Errorf("unsupported store type: %v", config.StoreType)
 	}
 
 	if err != nil {
@@ -99,14 +105,14 @@ func New(config *Config) (*Cache, error) {
 
 	cache := &Cache{
 		config: config,
-		store:  memStore,
+		store:  cacheStore,
 		stats:  &Stats{},
 		hooks:  config.Hooks,
 		sf:     &singleflight.Group[string, any]{},
 	}
 
 	// Set up store callbacks for statistics and hooks
-	if lruStore, ok := memStore.(store.LRUStore); ok {
+	if lruStore, ok := cacheStore.(store.LRUStore); ok {
 		lruStore.SetEvictCallback(func(key string, value any) {
 			cache.stats.incEvictions()
 			if cache.hooks != nil {
@@ -115,7 +121,7 @@ func New(config *Config) (*Cache, error) {
 		})
 	}
 
-	if ttlStore, ok := memStore.(store.TTLStore); ok {
+	if ttlStore, ok := cacheStore.(store.TTLStore); ok {
 		ttlStore.SetCleanupCallback(func(key string, value any) {
 			cache.stats.incEvictions()
 			if cache.hooks != nil {
@@ -125,6 +131,49 @@ func New(config *Config) (*Cache, error) {
 	}
 
 	return cache, nil
+}
+
+// createMemoryStore creates a memory-based store
+func createMemoryStore(config *Config) (store.Store, error) {
+	if config.CleanupInterval > 0 {
+		return memory.NewWithCleanup(config.MaxEntries, config.CleanupInterval)
+	}
+	return memory.New(config.MaxEntries)
+}
+
+// createRedisStore creates a Redis-based store
+func createRedisStore(config *Config) (store.Store, error) {
+	if config.Redis == nil {
+		return nil, fmt.Errorf("Redis configuration is required when using StoreTypeRedis")
+	}
+
+	redisConfig := &redisstore.Config{
+		DefaultTTL: config.DefaultTTL,
+		KeyPrefix:  config.Redis.KeyPrefix,
+		Context:    context.Background(),
+	}
+
+	// Use provided client or create a new one
+	if config.Redis.Client != nil {
+		redisConfig.Client = config.Redis.Client
+	} else {
+		// Create Redis client from connection parameters
+		client := redis.NewClient(&redis.Options{
+			Addr:     config.Redis.Addr,
+			Password: config.Redis.Password,
+			DB:       config.Redis.DB,
+		})
+
+		// Test the connection
+		ctx := context.Background()
+		if err := client.Ping(ctx).Err(); err != nil {
+			return nil, fmt.Errorf("failed to connect to Redis: %w", err)
+		}
+
+		redisConfig.Client = client
+	}
+
+	return redisstore.New(redisConfig)
 }
 
 // Get retrieves a value from the cache by key

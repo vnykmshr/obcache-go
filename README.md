@@ -122,6 +122,49 @@ config := obcache.NewDefaultConfig().
 cache, err := obcache.New(config)
 ```
 
+### Redis Configuration (Distributed Caching)
+
+obcache-go supports Redis as a backend for distributed caching scenarios:
+
+```go
+// Simple Redis configuration
+config := obcache.NewRedisConfig("localhost:6379").
+    WithDefaultTTL(30 * time.Minute).
+    WithRedisKeyPrefix("myapp:")
+
+cache, err := obcache.New(config)
+
+// Advanced Redis configuration
+client := redis.NewClient(&redis.Options{
+    Addr:         "redis-cluster:6379",
+    Password:     "secret",
+    DB:           1,
+    PoolSize:     10,
+    MinIdleConns: 5,
+})
+
+config := obcache.NewRedisConfigWithClient(client).
+    WithRedisKeyPrefix("distributed:").
+    WithDefaultTTL(1 * time.Hour)
+
+cache, err := obcache.New(config)
+
+// Or convert existing memory config to Redis
+config := obcache.NewDefaultConfig().
+    WithRedisAddr("localhost:6379").
+    WithRedisAuth("password").
+    WithRedisDB(2)
+```
+
+**Redis Features:**
+- **Distributed Caching**: Share cache across multiple application instances
+- **Persistence**: Cache survives application restarts
+- **Automatic TTL**: Redis handles expiration automatically  
+- **Connection Pooling**: Built-in connection pooling and retry logic
+- **Clustering**: Works with Redis clusters and Sentinel
+
+**Note**: Redis adapter uses JSON serialization. For production workloads with complex types, consider implementing custom serialization.
+
 ### Function Wrapping Options
 
 ```go
@@ -270,12 +313,21 @@ wrapped := obcache.WrapWithError(cache, func(T) (R, error))
 ### Configuration Options
 
 ```go
+// Memory cache configuration
 config := obcache.NewDefaultConfig()
 config.WithMaxEntries(n int)              // Set max entries (default: 1000)
 config.WithDefaultTTL(d time.Duration)    // Set default TTL (default: 5min)
 config.WithCleanupInterval(d time.Duration) // Set cleanup interval (default: 1min)
 config.WithKeyGenFunc(f KeyGenFunc)       // Set key generation function
 config.WithHooks(h *Hooks)                // Set event hooks
+
+// Redis cache configuration
+config := obcache.NewRedisConfig(addr string)           // Create Redis config
+config := obcache.NewRedisConfigWithClient(client)      // Use existing client
+config.WithRedisAddr(addr string)         // Set Redis address
+config.WithRedisAuth(password string)     // Set Redis password
+config.WithRedisDB(db int)                // Set Redis database
+config.WithRedisKeyPrefix(prefix string)  // Set key prefix
 ```
 
 ### Wrap Options
@@ -376,9 +428,8 @@ go test -bench=. ./...
 See the [examples/](examples/) directory for complete working examples:
 
 - [Basic Usage](examples/basic/main.go) - Simple cache operations
-- [Function Wrapping](examples/function-wrapping/main.go) - Advanced function caching
-- [Web Server](examples/web-server/main.go) - HTTP API with caching
-- [Database Integration](examples/database/main.go) - Caching database queries
+- [Advanced Features](examples/advanced/main.go) - Context-aware hooks and service integration
+- [Redis Distributed Caching](examples/redis-cache/main.go) - Redis backend for distributed scenarios
 
 ## Contributing
 
