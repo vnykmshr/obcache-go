@@ -84,8 +84,12 @@ func prometheusExample() {
 
 	// Create cache with Prometheus metrics
 	cacheConfig := obcache.NewDefaultConfig().
-		WithDefaultTTL(5*time.Minute).
-		WithMetricsExporter(prometheusExporter, "user-cache")
+		WithDefaultTTL(5 * time.Minute).
+		WithMetrics(&obcache.MetricsConfig{
+			Exporter:  prometheusExporter,
+			Enabled:   true,
+			CacheName: "user-cache",
+		})
 
 	cache, err := obcache.New(cacheConfig)
 	if err != nil {
@@ -158,9 +162,12 @@ func opentelemetryExample() {
 
 	// Create cache with OpenTelemetry metrics
 	cacheConfig := obcache.NewDefaultConfig().
-		WithDefaultTTL(10*time.Minute).
-		WithMetricsExporter(otelExporter, "product-cache").
-		WithMetricsReportingInterval(5 * time.Second)
+		WithDefaultTTL(10 * time.Minute).
+		WithMetrics(&obcache.MetricsConfig{
+			Exporter:  otelExporter,
+			Enabled:   true,
+			CacheName: "product-cache",
+		})
 
 	cache, err := obcache.New(cacheConfig)
 	if err != nil {
@@ -226,10 +233,14 @@ func multiExporterExample() {
 
 	// Create cache with multi-exporter
 	cacheConfig := obcache.NewDefaultConfig().
-		WithMetricsExporter(multiExporter, "multi-cache").
-		WithMetricsLabels(metrics.Labels{
-			"component": "multi-example",
-			"tier":      "cache",
+		WithMetrics(&obcache.MetricsConfig{
+			Exporter:  multiExporter,
+			Enabled:   true,
+			CacheName: "multi-cache",
+			Labels: metrics.Labels{
+				"component": "multi-example",
+				"tier":      "cache",
+			},
 		})
 
 	cache, err := obcache.New(cacheConfig)

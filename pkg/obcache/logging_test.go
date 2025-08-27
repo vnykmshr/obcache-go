@@ -265,30 +265,6 @@ func TestLoggingHooksIntegration(t *testing.T) {
 	}
 }
 
-func testLoggingWithContext(t *testing.T) { // Disabled: context API was simplified
-	testLogger := NewTestLogger()
-	hooks := CreateLoggingHooks(&LoggingConfig{
-		Logger:       testLogger,
-		LogCacheHits: true,
-	})
-
-	cache, err := New(NewDefaultConfig().WithHooks(hooks))
-	if err != nil {
-		t.Fatalf("Failed to create cache: %v", err)
-	}
-
-	// Set value and get with context
-	_ = cache.Set("user-key", "user-data", time.Hour)
-
-	// Test basic cache operation logging
-	_, _ = cache.Get("user-key")
-
-	// Verify logging occurred (context features were simplified in API)
-	if !testLogger.HasLogWithMessage("Cache miss") {
-		t.Error("Expected cache operation to be logged")
-	}
-}
-
 func TestLoggingHookBuilder(t *testing.T) {
 	// Test fluent builder interface
 	hooks := NewLoggingHookBuilder().

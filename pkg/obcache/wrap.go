@@ -105,7 +105,7 @@ func wrapFunction[T any](cache *Cache, fn T, opts *WrapOptions) T {
 
 // executeWrappedFunction handles the core wrapping logic
 func executeWrappedFunction(cache *Cache, fnValue reflect.Value, fnType reflect.Type, opts *WrapOptions, args []reflect.Value) []reflect.Value {
-	ctx, keyArgs := extractContextAndArgs(fnType, args)
+	_, keyArgs := extractContextAndArgs(fnType, args)
 	key := opts.KeyFunc(keyArgs)
 
 	// If caching is disabled, call original function directly
@@ -120,7 +120,7 @@ func executeWrappedFunction(cache *Cache, fnValue reflect.Value, fnType reflect.
 		return convertCachedValue(cachedValue, fnType, hasErrorReturn)
 	}
 
-	return executeFunctionWithSingleflight(cache, fnValue, fnType, opts, args, ctx, keyArgs, key, hasErrorReturn)
+	return executeFunctionWithSingleflight(cache, fnValue, fnType, opts, args, key, hasErrorReturn)
 }
 
 // extractContextAndArgs extracts context and key args from function arguments
@@ -155,7 +155,7 @@ func hasErrorReturn(fnType reflect.Type) bool {
 }
 
 // executeFunctionWithSingleflight executes the function with singleflight pattern
-func executeFunctionWithSingleflight(cache *Cache, fnValue reflect.Value, fnType reflect.Type, opts *WrapOptions, args []reflect.Value, ctx context.Context, keyArgs []any, key string, hasErrorReturn bool) []reflect.Value {
+func executeFunctionWithSingleflight(cache *Cache, fnValue reflect.Value, fnType reflect.Type, opts *WrapOptions, args []reflect.Value, key string, hasErrorReturn bool) []reflect.Value {
 	// Use singleflight to prevent duplicate calls
 	compute := func() (any, error) {
 		results := fnValue.Call(args)

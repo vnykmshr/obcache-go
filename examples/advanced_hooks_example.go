@@ -127,29 +127,24 @@ func demonstrateHookComposition() {
 func testScenario1(cache *obcache.Cache) {
 	fmt.Println("\n--- Scenario 1: Metrics key with production context ---")
 
-	prodCtx := context.WithValue(context.Background(), "env", "production")
 	key := "metrics:api_requests"
 
 	// Set and get to trigger hooks
 	_ = cache.Set(key, 150, time.Hour)
-	_, _ = cache.Get(key, obcache.WithContext(prodCtx))
+	_, _ = cache.Get(key)
 
 	// Test miss scenario
-	_, _ = cache.Get("metrics:missing_key", obcache.WithContext(prodCtx))
+	_, _ = cache.Get("metrics:missing_key")
 }
 
 func testScenario2(cache *obcache.Cache) {
 	fmt.Println("\n--- Scenario 2: Debug key with debug context ---")
 
-	debugCtx := context.WithValue(
-		context.WithValue(context.Background(), "debug", true),
-		"env", "staging",
-	)
 	key := "debug:session_data"
 
 	// Set and get to trigger hooks
 	_ = cache.Set(key, map[string]string{"user": "alice", "session": "abc123"}, time.Hour)
-	_, _ = cache.Get(key, obcache.WithContext(debugCtx))
+	_, _ = cache.Get(key)
 }
 
 func testScenario3(cache *obcache.Cache) {

@@ -120,12 +120,15 @@ func noCompressionExample() {
 
 func gzipCompressionExample() {
 	// Create cache with gzip compression
-	cache, err := obcache.New(obcache.NewDefaultConfig().
+	config := obcache.NewDefaultConfig().
 		WithMaxEntries(100).
-		WithCompressionEnabled(true).
-		WithCompressionAlgorithm(compression.CompressorGzip).
-		WithCompressionMinSize(500). // Compress values larger than 500 bytes
-		WithCompressionLevel(6))     // Balanced compression level
+		WithCompression(&compression.Config{
+			Enabled:   true,
+			Algorithm: compression.CompressorGzip,
+			MinSize:   500, // Compress values larger than 500 bytes
+			Level:     6,   // Balanced compression level
+		})
+	cache, err := obcache.New(config)
 	if err != nil {
 		log.Fatalf("Failed to create cache: %v", err)
 	}
@@ -171,12 +174,15 @@ func gzipCompressionExample() {
 
 func deflateCompressionExample() {
 	// Create cache with deflate compression
-	cache, err := obcache.New(obcache.NewDefaultConfig().
+	config := obcache.NewDefaultConfig().
 		WithMaxEntries(100).
-		WithCompressionEnabled(true).
-		WithCompressionAlgorithm(compression.CompressorDeflate).
-		WithCompressionMinSize(1000). // Higher threshold
-		WithCompressionLevel(9))      // Maximum compression
+		WithCompression(&compression.Config{
+			Enabled:   true,
+			Algorithm: compression.CompressorDeflate,
+			MinSize:   1000, // Higher threshold
+			Level:     9,    // Maximum compression
+		})
+	cache, err := obcache.New(config) // Maximum compression
 	if err != nil {
 		log.Fatalf("Failed to create cache: %v", err)
 	}
@@ -212,11 +218,14 @@ func compressionThresholdExample() {
 	for _, minSize := range testSizes {
 		fmt.Printf("\n  Testing with minimum size: %d bytes\n", minSize)
 
-		cache, err := obcache.New(obcache.NewDefaultConfig().
+		config := obcache.NewDefaultConfig().
 			WithMaxEntries(50).
-			WithCompressionEnabled(true).
-			WithCompressionAlgorithm(compression.CompressorGzip).
-			WithCompressionMinSize(minSize))
+			WithCompression(&compression.Config{
+				Enabled:   true,
+				Algorithm: compression.CompressorGzip,
+				MinSize:   minSize,
+			})
+		cache, err := obcache.New(config)
 		if err != nil {
 			log.Printf("Failed to create cache: %v", err)
 			continue
@@ -274,11 +283,14 @@ func performanceComparisonExample() {
 	fmt.Printf("  Testing %d operations with gzip compression...\n", iterations)
 	start = time.Now()
 
-	compressedCache, _ := obcache.New(obcache.NewDefaultConfig().
+	config := obcache.NewDefaultConfig().
 		WithMaxEntries(200).
-		WithCompressionEnabled(true).
-		WithCompressionAlgorithm(compression.CompressorGzip).
-		WithCompressionMinSize(1000))
+		WithCompression(&compression.Config{
+			Enabled:   true,
+			Algorithm: compression.CompressorGzip,
+			MinSize:   1000,
+		})
+	compressedCache, _ := obcache.New(config)
 
 	for i := 0; i < iterations; i++ {
 		key := fmt.Sprintf("test_%d", i)

@@ -19,7 +19,6 @@ import (
 	"github.com/vnykmshr/obcache-go/pkg/metrics"
 )
 
-
 func (c *Cache) rlock(fn func()) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -32,14 +31,14 @@ func (c *Cache) lock(fn func()) {
 	fn()
 }
 
-func (c *Cache) hit(key string, value any, ctx context.Context) {
+func (c *Cache) hit(ctx context.Context, key string, value any) {
 	c.stats.incHits()
 	if c.hooks != nil {
 		c.hooks.invokeOnHitWithCtx(ctx, key, value, nil)
 	}
 }
 
-func (c *Cache) miss(key string, ctx context.Context) {
+func (c *Cache) miss(ctx context.Context, key string) {
 	c.stats.incMisses()
 	if c.hooks != nil {
 		c.hooks.invokeOnMissWithCtx(ctx, key, nil)
@@ -212,17 +211,17 @@ func (c *Cache) Get(key string) (any, bool) {
 	c.rlock(func() {
 		entry, ok := c.store.Get(key)
 		if !ok {
-			c.miss(key, ctx)
+			c.miss(ctx, key)
 			return
 		}
 
 		value, err := c.decompressValue(entry)
 		if err != nil {
-			c.miss(key, ctx)
+			c.miss(ctx, key)
 			return
 		}
 
-		c.hit(key, value, ctx)
+		c.hit(ctx, key, value)
 		result = value
 		found = true
 	})
