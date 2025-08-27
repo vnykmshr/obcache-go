@@ -21,17 +21,17 @@ func TestEvictionStrategies(t *testing.T) {
 		},
 		{
 			name:         "LRU_Explicit",
-			config:       NewDefaultConfig().WithMaxEntries(2).WithLRUEviction(),
+			config:       NewDefaultConfig().WithMaxEntries(2).WithEvictionType(eviction.LRU),
 			evictionType: "lru",
 		},
 		{
 			name:         "LFU",
-			config:       NewDefaultConfig().WithMaxEntries(2).WithLFUEviction(),
+			config:       NewDefaultConfig().WithMaxEntries(2).WithEvictionType(eviction.LFU),
 			evictionType: "lfu",
 		},
 		{
 			name:         "FIFO",
-			config:       NewDefaultConfig().WithMaxEntries(2).WithFIFOEviction(),
+			config:       NewDefaultConfig().WithMaxEntries(2).WithEvictionType(eviction.FIFO),
 			evictionType: "fifo",
 		},
 	}
@@ -155,7 +155,7 @@ func testFIFOBehavior(t *testing.T, cache *Cache) {
 }
 
 func TestEvictionWithWrappedFunctions(t *testing.T) {
-	config := NewDefaultConfig().WithMaxEntries(2).WithLFUEviction()
+	config := NewDefaultConfig().WithMaxEntries(2).WithEvictionType(eviction.LFU)
 	cache, err := New(config)
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -215,7 +215,7 @@ func TestEvictionCallbacks(t *testing.T) {
 
 	config := NewDefaultConfig().
 		WithMaxEntries(2).
-		WithFIFOEviction().
+		WithEvictionType(eviction.FIFO).
 		WithHooks(&Hooks{
 			OnEvict: []OnEvictHook{
 				func(key string, value any, reason EvictReason) {
@@ -330,17 +330,17 @@ func TestConfigurationMethods(t *testing.T) {
 	}
 
 	// Test convenience methods
-	config = config.WithLRUEviction()
+	config = config.WithEvictionType(eviction.LRU)
 	if config.EvictionType != eviction.LRU {
 		t.Errorf("Expected eviction type to be LRU, got %s", config.EvictionType)
 	}
 
-	config = config.WithLFUEviction()
+	config = config.WithEvictionType(eviction.LFU)
 	if config.EvictionType != eviction.LFU {
 		t.Errorf("Expected eviction type to be LFU, got %s", config.EvictionType)
 	}
 
-	config = config.WithFIFOEviction()
+	config = config.WithEvictionType(eviction.FIFO)
 	if config.EvictionType != eviction.FIFO {
 		t.Errorf("Expected eviction type to be FIFO, got %s", config.EvictionType)
 	}

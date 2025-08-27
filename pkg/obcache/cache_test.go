@@ -60,7 +60,7 @@ func TestCacheMiss(t *testing.T) {
 	}
 }
 
-func TestCacheInvalidate(t *testing.T) {
+func TestCacheDelete(t *testing.T) {
 	cache, err := New(NewDefaultConfig())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -76,16 +76,16 @@ func TestCacheInvalidate(t *testing.T) {
 		t.Fatal("Expected to find key before invalidation")
 	}
 
-	// Invalidate
-	err = cache.Invalidate(key)
+	// Delete
+	err = cache.Delete(key)
 	if err != nil {
-		t.Fatalf("Invalidate failed: %v", err)
+		t.Fatalf("Delete failed: %v", err)
 	}
 
 	// Verify it's gone
 	_, found = cache.Get(key)
 	if found {
-		t.Fatal("Expected key to be gone after invalidation")
+		t.Fatal("Expected key to be gone after deletion")
 	}
 
 	stats := cache.Stats()
@@ -94,7 +94,7 @@ func TestCacheInvalidate(t *testing.T) {
 	}
 }
 
-func TestCacheWarmup(t *testing.T) {
+func TestCachePut(t *testing.T) {
 	cache, err := New(NewDefaultConfig())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -105,23 +105,23 @@ func TestCacheWarmup(t *testing.T) {
 	const warmedValue = "warmed-value"
 	value := warmedValue
 
-	// Warmup
-	err = cache.Warmup(key, value)
+	// Put
+	err = cache.Put(key, value)
 	if err != nil {
-		t.Fatalf("Warmup failed: %v", err)
+		t.Fatalf("Put failed: %v", err)
 	}
 
 	// Verify the value is cached
 	retrievedValue, found := cache.Get(key)
 	if !found {
-		t.Fatal("Expected key to be found after warmup")
+		t.Fatal("Expected key to be found after put")
 	}
 	if retrievedValue != value {
 		t.Fatalf("Expected %v, got %v", value, retrievedValue)
 	}
 }
 
-func TestCacheWarmupWithTTL(t *testing.T) {
+func TestCacheSetWithTTL(t *testing.T) {
 	cache, err := New(NewDefaultConfig())
 	if err != nil {
 		t.Fatalf("Failed to create cache: %v", err)
@@ -133,7 +133,7 @@ func TestCacheWarmupWithTTL(t *testing.T) {
 	value := warmedValue
 	customTTL := 30 * time.Minute
 
-	// Warmup with custom TTL (using Set, since WarmupWithTTL was redundant)
+	// Set with custom TTL
 	err = cache.Set(key, value, customTTL)
 	if err != nil {
 		t.Fatalf("Set (warmup with TTL) failed: %v", err)
@@ -142,7 +142,7 @@ func TestCacheWarmupWithTTL(t *testing.T) {
 	// Verify the value is cached
 	retrievedValue, found := cache.Get(key)
 	if !found {
-		t.Fatal("Expected key to be found after warmup")
+		t.Fatal("Expected key to be found after put")
 	}
 	if retrievedValue != value {
 		t.Fatalf("Expected %v, got %v", value, retrievedValue)
@@ -271,7 +271,7 @@ func TestCacheReset(t *testing.T) {
 	_ = cache.Set("key2", "value2", time.Hour)
 	cache.Get("key1")
 	cache.Get("nonexistent")
-	cache.Invalidate("key2")
+	cache.Delete("key2")
 
 	stats := cache.Stats()
 	if stats.Total() == 0 {

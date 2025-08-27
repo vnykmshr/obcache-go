@@ -424,9 +424,9 @@ func ExampleBasicLogging() {
 	}
 	_, _ = cache.Get("user:123") // Will log cache hit
 	_, _ = cache.Get("user:999") // Will log cache miss
-	if err := cache.Invalidate("user:123"); err != nil {
+	if err := cache.Delete("user:123"); err != nil {
 		// Handle error appropriately in real usage
-	} // Will log invalidation
+	} // Will log deletion
 }
 
 // ExampleAdvancedLogging demonstrates advanced logging configuration

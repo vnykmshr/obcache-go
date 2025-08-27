@@ -116,7 +116,7 @@ func executeWrappedFunction(cache *Cache, fnValue reflect.Value, fnType reflect.
 	hasErrorReturn := hasErrorReturn(fnType)
 
 	// Try to get from cache first
-	if cachedValue, found := cache.Get(key, WithContext(ctx), WithArgs(keyArgs)); found {
+	if cachedValue, found := cache.Get(key); found {
 		return convertCachedValue(cachedValue, fnType, hasErrorReturn)
 	}
 
@@ -175,7 +175,7 @@ func executeFunctionWithSingleflight(cache *Cache, fnValue reflect.Value, fnType
 			if errorTTL == 0 {
 				errorTTL = opts.TTL
 			}
-			cache.Set(key, cachedError{Err: err}, errorTTL, WithContext(ctx), WithArgs(keyArgs))
+			cache.Set(key, cachedError{Err: err}, errorTTL)
 		}
 		// Return the error in the function's expected format
 		return createErrorReturn(fnType, err)
@@ -183,7 +183,7 @@ func executeFunctionWithSingleflight(cache *Cache, fnValue reflect.Value, fnType
 
 	// Store in cache if this wasn't a shared call
 	if !shared {
-		cache.Set(key, value, opts.TTL, WithContext(ctx), WithArgs(keyArgs))
+		cache.Set(key, value, opts.TTL)
 	}
 
 	// Convert the result back to the expected format

@@ -199,52 +199,8 @@ func (c *Config) WithHooks(hooks *Hooks) *Config {
 func (c *Config) WithRedis(redisConfig *RedisConfig) *Config {
 	c.StoreType = StoreTypeRedis
 	c.Redis = redisConfig
-	// Disable memory-specific settings when using Redis
 	c.MaxEntries = 0
 	c.CleanupInterval = 0
-	return c
-}
-
-// WithRedisAddr configures the cache to use Redis with the given address
-func (c *Config) WithRedisAddr(addr string) *Config {
-	return c.WithRedis(&RedisConfig{
-		Addr:      addr,
-		KeyPrefix: "obcache:",
-	})
-}
-
-// WithRedisClient configures the cache to use Redis with a pre-configured client
-func (c *Config) WithRedisClient(client redis.Cmdable) *Config {
-	return c.WithRedis(&RedisConfig{
-		Client:    client,
-		KeyPrefix: "obcache:",
-	})
-}
-
-// WithRedisAuth sets Redis authentication for the current Redis config
-func (c *Config) WithRedisAuth(password string) *Config {
-	if c.Redis == nil {
-		c.Redis = &RedisConfig{KeyPrefix: "obcache:"}
-	}
-	c.Redis.Password = password
-	return c
-}
-
-// WithRedisDB sets the Redis database number
-func (c *Config) WithRedisDB(db int) *Config {
-	if c.Redis == nil {
-		c.Redis = &RedisConfig{KeyPrefix: "obcache:"}
-	}
-	c.Redis.DB = db
-	return c
-}
-
-// WithRedisKeyPrefix sets the Redis key prefix
-func (c *Config) WithRedisKeyPrefix(prefix string) *Config {
-	if c.Redis == nil {
-		c.Redis = &RedisConfig{}
-	}
-	c.Redis.KeyPrefix = prefix
 	return c
 }
 
@@ -254,86 +210,9 @@ func (c *Config) WithMetrics(metricsConfig *MetricsConfig) *Config {
 	return c
 }
 
-// WithMetricsExporter configures metrics with the given exporter
-func (c *Config) WithMetricsExporter(exporter metrics.Exporter, cacheName string) *Config {
-	c.Metrics = &MetricsConfig{
-		Exporter:          exporter,
-		Enabled:           true,
-		CacheName:         cacheName,
-		ReportingInterval: 30 * time.Second,
-		Labels:            make(metrics.Labels),
-	}
-	return c
-}
-
-// WithMetricsLabels adds labels to metrics configuration
-func (c *Config) WithMetricsLabels(labels metrics.Labels) *Config {
-	if c.Metrics == nil {
-		c.Metrics = &MetricsConfig{
-			Enabled:           false,
-			Labels:            make(metrics.Labels),
-			ReportingInterval: 30 * time.Second,
-		}
-	}
-	for k, v := range labels {
-		c.Metrics.Labels[k] = v
-	}
-	return c
-}
-
-// WithMetricsReportingInterval sets the metrics reporting interval
-func (c *Config) WithMetricsReportingInterval(interval time.Duration) *Config {
-	if c.Metrics == nil {
-		c.Metrics = &MetricsConfig{
-			Enabled:           false,
-			Labels:            make(metrics.Labels),
-			ReportingInterval: interval,
-		}
-	} else {
-		c.Metrics.ReportingInterval = interval
-	}
-	return c
-}
-
 // WithCompression configures cache compression
 func (c *Config) WithCompression(compressionConfig *compression.Config) *Config {
 	c.Compression = compressionConfig
-	return c
-}
-
-// WithCompressionEnabled enables compression with default settings
-func (c *Config) WithCompressionEnabled(enabled bool) *Config {
-	if c.Compression == nil {
-		c.Compression = compression.NewDefaultConfig()
-	}
-	c.Compression.Enabled = enabled
-	return c
-}
-
-// WithCompressionAlgorithm sets the compression algorithm
-func (c *Config) WithCompressionAlgorithm(algorithm compression.CompressorType) *Config {
-	if c.Compression == nil {
-		c.Compression = compression.NewDefaultConfig()
-	}
-	c.Compression.Algorithm = algorithm
-	return c
-}
-
-// WithCompressionMinSize sets the minimum size threshold for compression
-func (c *Config) WithCompressionMinSize(minSize int) *Config {
-	if c.Compression == nil {
-		c.Compression = compression.NewDefaultConfig()
-	}
-	c.Compression.MinSize = minSize
-	return c
-}
-
-// WithCompressionLevel sets the compression level
-func (c *Config) WithCompressionLevel(level int) *Config {
-	if c.Compression == nil {
-		c.Compression = compression.NewDefaultConfig()
-	}
-	c.Compression.Level = level
 	return c
 }
 
@@ -341,19 +220,4 @@ func (c *Config) WithCompressionLevel(level int) *Config {
 func (c *Config) WithEvictionType(evictionType eviction.EvictionType) *Config {
 	c.EvictionType = evictionType
 	return c
-}
-
-// WithLRUEviction configures the cache to use LRU eviction strategy
-func (c *Config) WithLRUEviction() *Config {
-	return c.WithEvictionType(eviction.LRU)
-}
-
-// WithLFUEviction configures the cache to use LFU eviction strategy
-func (c *Config) WithLFUEviction() *Config {
-	return c.WithEvictionType(eviction.LFU)
-}
-
-// WithFIFOEviction configures the cache to use FIFO eviction strategy
-func (c *Config) WithFIFOEviction() *Config {
-	return c.WithEvictionType(eviction.FIFO)
 }

@@ -19,89 +19,30 @@ import (
 	"github.com/vnykmshr/obcache-go/pkg/metrics"
 )
 
-// Context keys for cache-specific metadata
-type contextKey string
 
-const (
-	// CacheTagsKey can be used to store cache tags in context
-	CacheTagsKey contextKey = "cache_tags"
-)
-
-// CacheTagsFromContext extracts cache tags from context
-func CacheTagsFromContext(ctx context.Context) []string {
-	if tags, ok := ctx.Value(CacheTagsKey).([]string); ok {
-		return tags
-	}
-	return nil
-}
-
-// WithCacheTags adds cache tags to context
-func WithCacheTags(ctx context.Context, tags []string) context.Context {
-	return context.WithValue(ctx, CacheTagsKey, tags)
-}
-
-// CacheCallContext contains context and function arguments for cache operations
-type CacheCallContext struct {
-	ctx  context.Context
-	args []any
-}
-
-// CacheOption configures cache operation behavior
-type CacheOption func(*CacheCallContext)
-
-// WithContext sets the context for a cache operation
-func WithContext(ctx context.Context) CacheOption {
-	return func(cctx *CacheCallContext) {
-		cctx.ctx = ctx
-	}
-}
-
-// WithArgs sets the function arguments for a cache operation
-func WithArgs(args []any) CacheOption {
-	return func(cctx *CacheCallContext) {
-		cctx.args = args
-	}
-}
-
-// newCacheCallContext creates a new CacheCallContext with defaults
-func newCacheCallContext(options ...CacheOption) *CacheCallContext {
-	cctx := &CacheCallContext{
-		ctx:  context.Background(),
-		args: nil,
-	}
-	for _, opt := range options {
-		opt(cctx)
-	}
-	return cctx
-}
-
-// withReadLock executes a function while holding a read lock
-func (c *Cache) withReadLock(fn func()) {
+func (c *Cache) rlock(fn func()) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	fn()
 }
 
-// withWriteLock executes a function while holding a write lock
-func (c *Cache) withWriteLock(fn func()) {
+func (c *Cache) lock(fn func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	fn()
 }
 
-// recordHit records a cache hit with stats and hooks
-func (c *Cache) recordHit(key string, value any, cctx *CacheCallContext) {
+func (c *Cache) hit(key string, value any, ctx context.Context) {
 	c.stats.incHits()
 	if c.hooks != nil {
-		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, value, cctx.args)
+		c.hooks.invokeOnHitWithCtx(ctx, key, value, nil)
 	}
 }
 
-// recordMiss records a cache miss with stats and hooks
-func (c *Cache) recordMiss(key string, cctx *CacheCallContext) {
+func (c *Cache) miss(key string, ctx context.Context) {
 	c.stats.incMisses()
 	if c.hooks != nil {
-		c.hooks.invokeOnMissWithCtx(cctx.ctx, key, cctx.args)
+		c.hooks.invokeOnMissWithCtx(ctx, key, nil)
 	}
 }
 
@@ -258,42 +199,30 @@ func createRedisStore(config *Config) (store.Store, error) {
 }
 
 // Get retrieves a value from the cache by key
-func (c *Cache) Get(key string, options ...CacheOption) (any, bool) {
-	return c.GetWithContext(context.Background(), key, options...)
-}
-
-// GetWithContext retrieves a value from the cache by key with context
-func (c *Cache) GetWithContext(ctx context.Context, key string, options ...CacheOption) (any, bool) {
+func (c *Cache) Get(key string) (any, bool) {
 	start := time.Now()
 	defer func() {
 		c.recordCacheOperation(metrics.OperationGet, time.Since(start))
 	}()
 
-	// Simple context handling - most users won't need complex options
-	cctx := &CacheCallContext{ctx: ctx}
-	if len(options) > 0 {
-		cctx = newCacheCallContext(append([]CacheOption{WithContext(ctx)}, options...)...)
-	}
-
 	var result any
 	var found bool
+	ctx := context.Background()
 
-	c.withReadLock(func() {
-		entry, entryFound := c.store.Get(key)
-		if !entryFound {
-			c.recordMiss(key, cctx)
+	c.rlock(func() {
+		entry, ok := c.store.Get(key)
+		if !ok {
+			c.miss(key, ctx)
 			return
 		}
 
-		// Decompress value if needed
 		value, err := c.decompressValue(entry)
 		if err != nil {
-			// If decompression fails, treat as cache miss
-			c.recordMiss(key, cctx)
+			c.miss(key, ctx)
 			return
 		}
 
-		c.recordHit(key, value, cctx)
+		c.hit(key, value, ctx)
 		result = value
 		found = true
 	})
@@ -302,9 +231,7 @@ func (c *Cache) GetWithContext(ctx context.Context, key string, options ...Cache
 }
 
 // Set stores a value in the cache with the specified key and TTL
-// If ttl is 0 or negative, the default TTL from config is used
-// If both are 0 or negative, the entry never expires
-func (c *Cache) Set(key string, value any, ttl time.Duration, _ ...CacheOption) error {
+func (c *Cache) Set(key string, value any, ttl time.Duration) error {
 	start := time.Now()
 	defer func() {
 		c.recordCacheOperation(metrics.OperationSet, time.Since(start))
@@ -314,15 +241,14 @@ func (c *Cache) Set(key string, value any, ttl time.Duration, _ ...CacheOption) 
 		ttl = c.config.DefaultTTL
 	}
 
-	// Prepare entry with compression if enabled
-	cacheEntry, err := c.createCompressedEntry(value, ttl)
+	entry, err := c.createCompressedEntry(value, ttl)
 	if err != nil {
-		return fmt.Errorf("failed to create compressed entry: %w", err)
+		return fmt.Errorf("failed to create entry: %w", err)
 	}
 
 	var setErr error
-	c.withWriteLock(func() {
-		setErr = c.store.Set(key, cacheEntry)
+	c.lock(func() {
+		setErr = c.store.Set(key, entry)
 		if setErr == nil {
 			c.updateKeyCount()
 		}
@@ -331,29 +257,23 @@ func (c *Cache) Set(key string, value any, ttl time.Duration, _ ...CacheOption) 
 	return setErr
 }
 
-// Warmup preloads a value into the cache (alias for Set with default TTL)
-func (c *Cache) Warmup(key string, value any) error {
-	return c.Set(key, value, c.config.DefaultTTL)
-}
-
-// Put is an alias for Set with default TTL for more intuitive usage
+// Put stores a value using the default TTL
 func (c *Cache) Put(key string, value any) error {
 	return c.Set(key, value, c.config.DefaultTTL)
 }
 
-// Invalidate removes a specific key from the cache
-func (c *Cache) Invalidate(key string, options ...CacheOption) error {
-	cctx := newCacheCallContext(options...)
+// Delete removes a key from the cache
+func (c *Cache) Delete(key string) error {
 	var err error
+	ctx := context.Background()
 
-	c.withWriteLock(func() {
+	c.lock(func() {
 		err = c.store.Delete(key)
 		if err == nil {
 			c.stats.incInvalidations()
 			c.updateKeyCount()
-
 			if c.hooks != nil {
-				c.hooks.invokeOnInvalidateWithCtx(cctx.ctx, key, cctx.args)
+				c.hooks.invokeOnInvalidateWithCtx(ctx, key, nil)
 			}
 		}
 	})
@@ -361,24 +281,24 @@ func (c *Cache) Invalidate(key string, options ...CacheOption) error {
 	return err
 }
 
-// InvalidateAll removes all entries from the cache
-func (c *Cache) InvalidateAll(options ...CacheOption) error {
-	cctx := newCacheCallContext(options...)
+// Clear removes all entries from the cache
+func (c *Cache) Clear() error {
+	var err error
+	ctx := context.Background()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	keys := c.store.Keys()
-	err := c.store.Clear()
-	if err == nil {
-		for _, key := range keys {
-			c.stats.incInvalidations()
-			if c.hooks != nil {
-				c.hooks.invokeOnInvalidateWithCtx(cctx.ctx, key, cctx.args)
+	c.lock(func() {
+		keys := c.store.Keys()
+		err = c.store.Clear()
+		if err == nil {
+			for _, key := range keys {
+				c.stats.incInvalidations()
+				if c.hooks != nil {
+					c.hooks.invokeOnInvalidateWithCtx(ctx, key, nil)
+				}
 			}
+			c.updateKeyCount()
 		}
-		c.updateKeyCount()
-	}
+	})
 
 	return err
 }
@@ -392,7 +312,7 @@ func (c *Cache) Stats() *Stats {
 // Keys returns all current cache keys
 func (c *Cache) Keys() []string {
 	var keys []string
-	c.withReadLock(func() {
+	c.rlock(func() {
 		keys = c.store.Keys()
 	})
 	return keys
@@ -401,69 +321,58 @@ func (c *Cache) Keys() []string {
 // Len returns the current number of entries in the cache
 func (c *Cache) Len() int {
 	var length int
-	c.withReadLock(func() {
+	c.rlock(func() {
 		length = c.store.Len()
 	})
 	return length
 }
 
-// Has checks if a key exists in the cache (without updating access time)
+// Has checks if a key exists in the cache
 func (c *Cache) Has(key string) bool {
 	var exists bool
-	c.withReadLock(func() {
+	c.rlock(func() {
 		entry, found := c.store.Get(key)
 		exists = found && !entry.IsExpired()
 	})
 	return exists
 }
 
-// GetWithTTL retrieves a value and its remaining TTL
-func (c *Cache) GetWithTTL(key string, options ...CacheOption) (value any, ttl time.Duration, found bool) {
-	cctx := newCacheCallContext(options...)
-
-	c.withReadLock(func() {
-		entry, entryFound := c.store.Get(key)
-		if !entryFound {
-			c.recordMiss(key, cctx)
-			return
+// TTL returns the remaining TTL for a key
+func (c *Cache) TTL(key string) (time.Duration, bool) {
+	var ttl time.Duration
+	var found bool
+	c.rlock(func() {
+		entry, ok := c.store.Get(key)
+		if ok && !entry.IsExpired() {
+			ttl = entry.TTL()
+			found = true
 		}
-
-		c.recordHit(key, entry.Value, cctx)
-		value = entry.Value
-		ttl = entry.TTL()
-		found = true
 	})
-
-	return value, ttl, found
+	return ttl, found
 }
 
 // Close closes the cache and cleans up resources
 func (c *Cache) Close() error {
 	var err error
-	c.withWriteLock(func() {
-		// Stop metrics reporting if running
+	c.lock(func() {
 		if c.metricsStop != nil {
 			close(c.metricsStop)
 			c.metricsWg.Wait()
 		}
-
-		// Close metrics exporter
 		if c.metricsExporter != nil {
 			c.metricsExporter.Close()
 		}
-
 		err = c.store.Close()
 	})
 	return err
 }
 
-// Cleanup manually triggers cleanup of expired entries
-// Returns the number of entries removed
+// Cleanup removes expired entries and returns count removed
 func (c *Cache) Cleanup() int {
 	var removed int
-	c.withWriteLock(func() {
-		if ttlStore, ok := c.store.(store.TTLStore); ok {
-			removed = ttlStore.Cleanup()
+	c.lock(func() {
+		if store, ok := c.store.(store.TTLStore); ok {
+			removed = store.Cleanup()
 			c.updateKeyCount()
 		}
 	})
