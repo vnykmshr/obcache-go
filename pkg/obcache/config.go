@@ -124,36 +124,45 @@ func NewDefaultConfig() *Config {
 	}
 }
 
+// NewSimpleConfig returns a Config optimized for simple key-value caching
+// with minimal configuration needed for most use cases
+func NewSimpleConfig(maxEntries int, defaultTTL time.Duration) *Config {
+	return &Config{
+		StoreType:       StoreTypeMemory,
+		MaxEntries:      maxEntries,
+		DefaultTTL:      defaultTTL,
+		CleanupInterval: defaultTTL / 2, // Clean up twice as often as TTL
+		EvictionType:    eviction.LRU,
+		KeyGenFunc:      nil,
+		Hooks:           &Hooks{},
+		Redis:           nil,
+	}
+}
+
 // NewRedisConfig returns a Config configured for Redis storage
 func NewRedisConfig(addr string) *Config {
-	return &Config{
-		StoreType:       StoreTypeRedis,
-		MaxEntries:      0, // Not applicable for Redis
-		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 0,   // Redis handles TTL automatically
-		KeyGenFunc:      nil, // will use DefaultKeyFunc
-		Hooks:           &Hooks{},
-		Redis: &RedisConfig{
-			Addr:      addr,
-			KeyPrefix: "obcache:",
-		},
+	config := NewDefaultConfig()
+	config.StoreType = StoreTypeRedis
+	config.MaxEntries = 0      // Not applicable for Redis
+	config.CleanupInterval = 0 // Redis handles TTL automatically
+	config.Redis = &RedisConfig{
+		Addr:      addr,
+		KeyPrefix: "obcache:",
 	}
+	return config
 }
 
 // NewRedisConfigWithClient returns a Config configured for Redis with a pre-configured client
 func NewRedisConfigWithClient(client redis.Cmdable) *Config {
-	return &Config{
-		StoreType:       StoreTypeRedis,
-		MaxEntries:      0, // Not applicable for Redis
-		DefaultTTL:      5 * time.Minute,
-		CleanupInterval: 0,   // Redis handles TTL automatically
-		KeyGenFunc:      nil, // will use DefaultKeyFunc
-		Hooks:           &Hooks{},
-		Redis: &RedisConfig{
-			Client:    client,
-			KeyPrefix: "obcache:",
-		},
+	config := NewDefaultConfig()
+	config.StoreType = StoreTypeRedis
+	config.MaxEntries = 0      // Not applicable for Redis
+	config.CleanupInterval = 0 // Redis handles TTL automatically
+	config.Redis = &RedisConfig{
+		Client:    client,
+		KeyPrefix: "obcache:",
 	}
+	return config
 }
 
 // WithMaxEntries sets the maximum number of cache entries

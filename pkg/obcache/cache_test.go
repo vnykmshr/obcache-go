@@ -133,10 +133,10 @@ func TestCacheWarmupWithTTL(t *testing.T) {
 	value := warmedValue
 	customTTL := 30 * time.Minute
 
-	// Warmup with custom TTL
-	err = cache.WarmupWithTTL(key, value, customTTL)
+	// Warmup with custom TTL (using Set, since WarmupWithTTL was redundant)
+	err = cache.Set(key, value, customTTL)
 	if err != nil {
-		t.Fatalf("WarmupWithTTL failed: %v", err)
+		t.Fatalf("Set (warmup with TTL) failed: %v", err)
 	}
 
 	// Verify the value is cached

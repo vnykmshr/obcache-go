@@ -75,6 +75,36 @@ func newCacheCallContext(options ...CacheOption) *CacheCallContext {
 	return cctx
 }
 
+// withReadLock executes a function while holding a read lock
+func (c *Cache) withReadLock(fn func()) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	fn()
+}
+
+// withWriteLock executes a function while holding a write lock
+func (c *Cache) withWriteLock(fn func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	fn()
+}
+
+// recordHit records a cache hit with stats and hooks
+func (c *Cache) recordHit(key string, value any, cctx *CacheCallContext) {
+	c.stats.incHits()
+	if c.hooks != nil {
+		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, value, cctx.args)
+	}
+}
+
+// recordMiss records a cache miss with stats and hooks
+func (c *Cache) recordMiss(key string, cctx *CacheCallContext) {
+	c.stats.incMisses()
+	if c.hooks != nil {
+		c.hooks.invokeOnMissWithCtx(cctx.ctx, key, cctx.args)
+	}
+}
+
 // Cache is the main cache implementation with LRU and TTL support
 type Cache struct {
 	config *Config
@@ -163,6 +193,12 @@ func New(config *Config) (*Cache, error) {
 	return cache, nil
 }
 
+// NewSimple creates a simple cache with minimal configuration
+// This is perfect for most use cases where you just need basic caching
+func NewSimple(maxEntries int, defaultTTL time.Duration) (*Cache, error) {
+	return New(NewSimpleConfig(maxEntries, defaultTTL))
+}
+
 // createMemoryStore creates a memory-based store
 func createMemoryStore(config *Config) (store.Store, error) {
 	// Use pluggable eviction strategy if EvictionType is set to non-LRU
@@ -223,39 +259,46 @@ func createRedisStore(config *Config) (store.Store, error) {
 
 // Get retrieves a value from the cache by key
 func (c *Cache) Get(key string, options ...CacheOption) (any, bool) {
+	return c.GetWithContext(context.Background(), key, options...)
+}
+
+// GetWithContext retrieves a value from the cache by key with context
+func (c *Cache) GetWithContext(ctx context.Context, key string, options ...CacheOption) (any, bool) {
 	start := time.Now()
 	defer func() {
 		c.recordCacheOperation(metrics.OperationGet, time.Since(start))
 	}()
 
-	cctx := newCacheCallContext(options...)
+	// Simple context handling - most users won't need complex options
+	cctx := &CacheCallContext{ctx: ctx}
+	if len(options) > 0 {
+		cctx = newCacheCallContext(append([]CacheOption{WithContext(ctx)}, options...)...)
+	}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	var result any
+	var found bool
 
-	entry, found := c.store.Get(key)
-	if !found {
-		c.stats.incMisses()
-		if c.hooks != nil {
-			c.hooks.invokeOnMissWithCtx(cctx.ctx, key, cctx.args)
+	c.withReadLock(func() {
+		entry, entryFound := c.store.Get(key)
+		if !entryFound {
+			c.recordMiss(key, cctx)
+			return
 		}
-		return nil, false
-	}
 
-	// Decompress value if needed
-	value, err := c.decompressValue(entry)
-	if err != nil {
-		// If decompression fails, treat as cache miss
-		c.stats.incMisses()
-		return nil, false
-	}
+		// Decompress value if needed
+		value, err := c.decompressValue(entry)
+		if err != nil {
+			// If decompression fails, treat as cache miss
+			c.recordMiss(key, cctx)
+			return
+		}
 
-	c.stats.incHits()
-	if c.hooks != nil {
-		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, value, cctx.args)
-	}
+		c.recordHit(key, value, cctx)
+		result = value
+		found = true
+	})
 
-	return value, true
+	return result, found
 }
 
 // Set stores a value in the cache with the specified key and TTL
@@ -277,15 +320,15 @@ func (c *Cache) Set(key string, value any, ttl time.Duration, _ ...CacheOption) 
 		return fmt.Errorf("failed to create compressed entry: %w", err)
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	var setErr error
+	c.withWriteLock(func() {
+		setErr = c.store.Set(key, cacheEntry)
+		if setErr == nil {
+			c.updateKeyCount()
+		}
+	})
 
-	err = c.store.Set(key, cacheEntry)
-	if err == nil {
-		c.updateKeyCount()
-	}
-
-	return err
+	return setErr
 }
 
 // Warmup preloads a value into the cache (alias for Set with default TTL)
@@ -293,27 +336,27 @@ func (c *Cache) Warmup(key string, value any) error {
 	return c.Set(key, value, c.config.DefaultTTL)
 }
 
-// WarmupWithTTL preloads a value into the cache with specific TTL
-func (c *Cache) WarmupWithTTL(key string, value any, ttl time.Duration) error {
-	return c.Set(key, value, ttl)
+// Put is an alias for Set with default TTL for more intuitive usage
+func (c *Cache) Put(key string, value any) error {
+	return c.Set(key, value, c.config.DefaultTTL)
 }
 
 // Invalidate removes a specific key from the cache
 func (c *Cache) Invalidate(key string, options ...CacheOption) error {
 	cctx := newCacheCallContext(options...)
+	var err error
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.withWriteLock(func() {
+		err = c.store.Delete(key)
+		if err == nil {
+			c.stats.incInvalidations()
+			c.updateKeyCount()
 
-	err := c.store.Delete(key)
-	if err == nil {
-		c.stats.incInvalidations()
-		c.updateKeyCount()
-
-		if c.hooks != nil {
-			c.hooks.invokeOnInvalidateWithCtx(cctx.ctx, key, cctx.args)
+			if c.hooks != nil {
+				c.hooks.invokeOnInvalidateWithCtx(cctx.ctx, key, cctx.args)
+			}
 		}
-	}
+	})
 
 	return err
 }
@@ -348,85 +391,83 @@ func (c *Cache) Stats() *Stats {
 
 // Keys returns all current cache keys
 func (c *Cache) Keys() []string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.store.Keys()
+	var keys []string
+	c.withReadLock(func() {
+		keys = c.store.Keys()
+	})
+	return keys
 }
 
 // Len returns the current number of entries in the cache
 func (c *Cache) Len() int {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return c.store.Len()
+	var length int
+	c.withReadLock(func() {
+		length = c.store.Len()
+	})
+	return length
 }
 
 // Has checks if a key exists in the cache (without updating access time)
 func (c *Cache) Has(key string) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	entry, found := c.store.Get(key)
-	return found && !entry.IsExpired()
+	var exists bool
+	c.withReadLock(func() {
+		entry, found := c.store.Get(key)
+		exists = found && !entry.IsExpired()
+	})
+	return exists
 }
 
 // GetWithTTL retrieves a value and its remaining TTL
 func (c *Cache) GetWithTTL(key string, options ...CacheOption) (value any, ttl time.Duration, found bool) {
 	cctx := newCacheCallContext(options...)
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	entry, found := c.store.Get(key)
-	if !found {
-		c.stats.incMisses()
-		if c.hooks != nil {
-			c.hooks.invokeOnMissWithCtx(cctx.ctx, key, cctx.args)
+	c.withReadLock(func() {
+		entry, entryFound := c.store.Get(key)
+		if !entryFound {
+			c.recordMiss(key, cctx)
+			return
 		}
-		return nil, 0, false
-	}
 
-	c.stats.incHits()
-	if c.hooks != nil {
-		c.hooks.invokeOnHitWithCtx(cctx.ctx, key, entry.Value, cctx.args)
-	}
+		c.recordHit(key, entry.Value, cctx)
+		value = entry.Value
+		ttl = entry.TTL()
+		found = true
+	})
 
-	return entry.Value, entry.TTL(), true
+	return value, ttl, found
 }
 
 // Close closes the cache and cleans up resources
 func (c *Cache) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	var err error
+	c.withWriteLock(func() {
+		// Stop metrics reporting if running
+		if c.metricsStop != nil {
+			close(c.metricsStop)
+			c.metricsWg.Wait()
+		}
 
-	// Stop metrics reporting if running
-	if c.metricsStop != nil {
-		close(c.metricsStop)
-		c.metricsWg.Wait()
-	}
+		// Close metrics exporter
+		if c.metricsExporter != nil {
+			c.metricsExporter.Close()
+		}
 
-	// Close metrics exporter
-	if c.metricsExporter != nil {
-		c.metricsExporter.Close()
-	}
-
-	return c.store.Close()
+		err = c.store.Close()
+	})
+	return err
 }
 
 // Cleanup manually triggers cleanup of expired entries
 // Returns the number of entries removed
 func (c *Cache) Cleanup() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if ttlStore, ok := c.store.(store.TTLStore); ok {
-		removed := ttlStore.Cleanup()
-		c.updateKeyCount()
-		return removed
-	}
-
-	return 0
+	var removed int
+	c.withWriteLock(func() {
+		if ttlStore, ok := c.store.(store.TTLStore); ok {
+			removed = ttlStore.Cleanup()
+			c.updateKeyCount()
+		}
+	})
+	return removed
 }
 
 // updateKeyCount updates the key count statistic
