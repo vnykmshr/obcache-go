@@ -74,3 +74,6 @@ help:
 	@echo "  check         - Run fmt, vet, lint, and test"
 	@echo "  bench         - Run benchmarks"
 	@echo "  help          - Display this help message"
+.PHONY: setup
+setup: ## Bootstrap repo: install git hooks
+	@scripts/setup.sh
